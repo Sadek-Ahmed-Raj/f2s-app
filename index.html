@@ -3294,11 +3294,29 @@ aside, nav, [class*="sidebar"], [class*="section-rail"] {
     url: "https://cqbxjfwitbnwlnwxnrw.supabase.co",
     publishableKey: "sb_publishable_-3anwrTbvZhUU8sgxM3SUQ_Y0ZjA1lC"
   };
+  // F2S Supabase client — GitHub Pages / SPA safe.
+  // The publishable key is intended for browser use; never put a secret/service_role key here.
   window.F2S_SUPABASE = window.supabase.createClient(
     window.F2S_SUPABASE_CONFIG.url,
-    window.F2S_SUPABASE_CONFIG.publishableKey
+    window.F2S_SUPABASE_CONFIG.publishableKey,
+    {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        flowType: "pkce"
+      },
+      global: {
+        headers: {
+          "x-client-info": "f2s-study-system"
+        }
+      }
+    }
   );
 </script>
+<style id="f2s-supabase-connection-status">
+  .f2s-auth-status.net{color:#D9A755}
+</style>
 <style id="f2s-supabase-auth-styles">
   .f2s-auth-trigger{position:fixed;right:14px;top:84px;z-index:9998;display:inline-flex;align-items:center;gap:7px;min-height:36px;padding:0 13px;border-radius:999px;border:1px solid rgba(217,167,85,.28);background:rgba(12,10,7,.88);color:#EDE7D8;box-shadow:0 10px 28px rgba(0,0,0,.25),inset 0 1px rgba(255,255,255,.04);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);font:600 11px/1 Inter,sans-serif;cursor:pointer;transition:.2s ease}
   .f2s-auth-trigger:hover{border-color:rgba(217,167,85,.55);transform:translateY(-1px)}
@@ -9766,7 +9784,14 @@ body{overflow-x:hidden}
 (function(){
   'use strict';
   const sb = window.F2S_SUPABASE;
-  if(!sb) return;
+  if(!sb){
+    const missingStatus = document.getElementById('f2sAuthStatus');
+    if(missingStatus){
+      missingStatus.textContent = 'F2S authentication service could not initialize. Please refresh the page.';
+      missingStatus.className = 'f2s-auth-status err';
+    }
+    return;
+  }
   const $ = id => document.getElementById(id);
   const modal=$('f2sAuthModal'), trigger=$('f2sAuthTrigger'), triggerText=$('f2sAuthTriggerText');
   const close=$('f2sAuthClose'), form=$('f2sAuthForm'), nameField=$('f2sNameField'), nameInput=$('f2sAuthName');
@@ -9774,6 +9799,30 @@ body{overflow-x:hidden}
   const status=$('f2sAuthStatus'), account=$('f2sAuthAccount'), accountName=$('f2sAuthAccountName');
   const accountEmail=$('f2sAuthAccountEmail'), signout=$('f2sAuthSignout'), loginTab=$('f2sLoginTab'), signupTab=$('f2sSignupTab');
   let mode='login';
+
+  function authErrorMessage(err){
+    const raw = String(err?.message || err || '').trim();
+    const name = String(err?.name || '').trim();
+
+    if (!navigator.onLine) {
+      return 'No internet connection. Please check your connection and try again.';
+    }
+    if (/failed to fetch|networkerror|load failed/i.test(raw)) {
+      return 'Could not reach F2S authentication server. Please check your internet connection, then try again.';
+    }
+    if (/invalid.*(api|key)|apikey/i.test(raw)) {
+      return 'F2S authentication key was rejected. Please contact the F2S admin.';
+    }
+    if (/email.*(not.*confirmed|confirm)/i.test(raw)) {
+      return 'Please confirm your email address first, then log in.';
+    }
+    return raw || (name ? `Authentication error: ${name}` : 'Something went wrong. Please try again.');
+  }
+
+  function authRedirectUrl(){
+    // Supabase email confirmation should return to the actual GitHub Pages app root.
+    return window.location.origin + window.location.pathname;
+  }
 
   function setStatus(message,type){status.textContent=message||'';status.className='f2s-auth-status'+(type?' '+type:'');}
   function setMode(next){
@@ -9809,7 +9858,17 @@ body{overflow-x:hidden}
       if(mode==='signup'){
         const name=nameInput.value.trim(), email=emailInput.value.trim(), password=passwordInput.value;
         if(!name) throw new Error('Please enter your name.');
-        const {data,error}=await sb.auth.signUp({email,password,options:{data:{display_name:name}}});
+        if(!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Please enter a valid email address.');
+        if(password.length < 6) throw new Error('Password must be at least 6 characters.');
+
+        const {data,error}=await sb.auth.signUp({
+          email,
+          password,
+          options:{
+            data:{display_name:name},
+            emailRedirectTo: authRedirectUrl()
+          }
+        });
         if(error) throw error;
         if(data.user && !data.session){
           setStatus('Account created. Check your email to confirm your account, then log in.','ok');
@@ -9822,7 +9881,7 @@ body{overflow-x:hidden}
         if(error) throw error;
         setStatus('Login successful.','ok'); setTimeout(closeModal,450);
       }
-    }catch(err){setStatus(err?.message||'Something went wrong. Please try again.','err');}
+    }catch(err){setStatus(authErrorMessage(err),'err');}
     finally{submit.disabled=false;}
   });
 
