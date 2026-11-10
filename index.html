@@ -5024,7 +5024,7 @@ aside, nav, [class*="sidebar"], [class*="section-rail"] {
 
 
 <!-- F2S Progressive Web App -->
-<link rel="manifest" href="./manifest.webmanifest">
+<link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
 <meta name="theme-color" content="#080808">
 <meta name="mobile-web-app-capable" content="yes">
@@ -18526,51 +18526,56 @@ body.f2s-feed-exclusive #f2sMoreMenu{z-index:2147482000!important}
 }
 </style>
 
-<!-- F2S PWA registration + native install prompt -->
+<!-- F2S PWA registration + native install prompt (GitHub Pages user site: domain root) -->
 <script id="f2s-pwa-setup">
 (function () {
-  const APP_BASE = new URL("./", window.location.href);
   let deferredInstallPrompt = null;
+  const installLink = () => document.getElementById("f2sPwaMenuInstall");
 
-  if ("serviceWorker" in navigator) {
+  if ("serviceWorker" in navigator && location.protocol === "https:") {
     window.addEventListener("load", function () {
-      navigator.serviceWorker.register(new URL("sw.js", APP_BASE).href, {
-        scope: APP_BASE.pathname
-      }).catch(function (error) {
-        console.error("F2S service worker registration failed:", error);
-      });
+      navigator.serviceWorker.register("/sw.js", { scope: "/" })
+        .then(function (registration) {
+          console.info("F2S PWA service worker ready:", registration.scope);
+        })
+        .catch(function (error) {
+          console.error("F2S PWA service worker registration failed:", error);
+        });
     });
   }
 
   window.addEventListener("beforeinstallprompt", function (event) {
     event.preventDefault();
     deferredInstallPrompt = event;
+    const link = installLink();
+    if (link) {
+      const small = link.querySelector("small");
+      if (small) small.textContent = "Ready to install on this device";
+    }
   });
 
   window.addEventListener("appinstalled", function () {
     deferredInstallPrompt = null;
-    const link = document.getElementById("f2sPwaMenuInstall");
+    const link = installLink();
     if (link) {
-      link.querySelector("b").textContent = "F2S App Installed";
-      link.querySelector("small").textContent = "Open F2S from your home screen";
+      const title = link.querySelector("b");
+      const small = link.querySelector("small");
+      if (title) title.textContent = "F2S App Installed";
+      if (small) small.textContent = "Open F2S from your home screen";
     }
   });
 
   document.addEventListener("click", async function (event) {
     const link = event.target.closest("#f2sPwaMenuInstall");
     if (!link) return;
-
     event.preventDefault();
     event.stopPropagation();
-    if (typeof event.stopImmediatePropagation === "function") {
-      event.stopImmediatePropagation();
-    }
+    if (event.stopImmediatePropagation) event.stopImmediatePropagation();
 
     const menu = document.getElementById("f2sMoreMenu");
     if (menu) menu.classList.remove("open");
 
-    if (window.matchMedia("(display-mode: standalone)").matches ||
-        window.navigator.standalone === true) {
+    if (window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true) {
       alert("F2S is already installed on this device.");
       return;
     }
@@ -18580,17 +18585,34 @@ body.f2s-feed-exclusive #f2sMoreMenu{z-index:2147482000!important}
       const choice = await deferredInstallPrompt.userChoice;
       deferredInstallPrompt = null;
       if (choice && choice.outcome === "accepted") {
-        link.querySelector("small").textContent = "Installation accepted";
+        const small = link.querySelector("small");
+        if (small) small.textContent = "Installation accepted";
       }
       return;
     }
 
     const ua = navigator.userAgent || "";
     if (/iPhone|iPad|iPod/i.test(ua)) {
-      alert('To install F2S on iPhone: tap the Share button in Safari, then choose "Add to Home Screen".');
-    } else {
-      alert('To install F2S: open this website in Chrome, tap the three-dot menu, then choose "Install app" or "Add to Home screen". If the option is missing, reload the website and check that the PWA files have been published.');
+      alert('To install F2S on iPhone: open this site in Safari, tap Share, then choose "Add to Home Screen".');
+      return;
     }
+
+    const isSecure = location.protocol === "https:" || location.hostname === "localhost";
+    const hasManifest = !!document.querySelector('link[rel="manifest"]');
+    const swReady = "serviceWorker" in navigator;
+    let swActive = false;
+    try {
+      const reg = swReady ? await navigator.serviceWorker.getRegistration("/") : null;
+      swActive = !!(reg && (reg.active || reg.waiting || reg.installing));
+    } catch (e) {}
+
+    alert(
+      "F2S install prompt is not available yet.\n\n" +
+      "Checks: HTTPS " + (isSecure ? "OK" : "NOT OK") +
+      " • Manifest link " + (hasManifest ? "OK" : "MISSING") +
+      " • Service Worker " + (swActive ? "ACTIVE" : "NOT ACTIVE") +
+      "\n\nOpen the website directly in Chrome, reload it, and check that /manifest.webmanifest, /sw.js and /icons/icon-192.png load from this same domain. If Chrome still says the app cannot be installed, inspect the manifest and service-worker errors in Chrome DevTools."
+    );
   }, true);
 })();
 </script>
