@@ -1,0 +1,27 @@
+
+{
+  "id": "/f2s-app/",
+  "name": "Fajr to Success",
+  "short_name": "F2S",
+  "description": "Fajr to Success - Productivity app for Muslim students",
+  "start_url": "/f2s-app/",
+  "scope": "/f2s-app/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#080808",
+  "theme_color": "#080808",
+  "icons": [
+    {
+      "src": "/f2s-app/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/f2s-app/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
