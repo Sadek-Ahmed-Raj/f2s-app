@@ -5024,7 +5024,7 @@ aside, nav, [class*="sidebar"], [class*="section-rail"] {
 
 
 <!-- F2S Progressive Web App -->
-<link rel="manifest" href="/manifest.webmanifest">
+<link rel="manifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
 <meta name="theme-color" content="#080808">
 <meta name="mobile-web-app-capable" content="yes">
@@ -18526,7 +18526,7 @@ body.f2s-feed-exclusive #f2sMoreMenu{z-index:2147482000!important}
 }
 </style>
 
-<!-- F2S PWA registration + native install prompt (GitHub Pages user site: domain root) -->
+<!-- F2S PWA registration + native install prompt (GitHub Pages project site: /f2s-app/) -->
 <script id="f2s-pwa-setup">
 (function () {
   let deferredInstallPrompt = null;
@@ -18534,7 +18534,7 @@ body.f2s-feed-exclusive #f2sMoreMenu{z-index:2147482000!important}
 
   if ("serviceWorker" in navigator && location.protocol === "https:") {
     window.addEventListener("load", function () {
-      navigator.serviceWorker.register("/sw.js", { scope: "/" })
+      navigator.serviceWorker.register(new URL("./sw.js", document.baseURI).href, { scope: new URL("./", document.baseURI).pathname })
         .then(function (registration) {
           console.info("F2S PWA service worker ready:", registration.scope);
         })
@@ -18602,7 +18602,7 @@ body.f2s-feed-exclusive #f2sMoreMenu{z-index:2147482000!important}
     const swReady = "serviceWorker" in navigator;
     let swActive = false;
     try {
-      const reg = swReady ? await navigator.serviceWorker.getRegistration("/") : null;
+      const reg = swReady ? await navigator.serviceWorker.getRegistration(new URL("./", document.baseURI).pathname) : null;
       swActive = !!(reg && (reg.active || reg.waiting || reg.installing));
     } catch (e) {}
 
@@ -18611,7 +18611,7 @@ body.f2s-feed-exclusive #f2sMoreMenu{z-index:2147482000!important}
       "Checks: HTTPS " + (isSecure ? "OK" : "NOT OK") +
       " • Manifest link " + (hasManifest ? "OK" : "MISSING") +
       " • Service Worker " + (swActive ? "ACTIVE" : "NOT ACTIVE") +
-      "\n\nOpen the website directly in Chrome, reload it, and check that /manifest.webmanifest, /sw.js and /icons/icon-192.png load from this same domain. If Chrome still says the app cannot be installed, inspect the manifest and service-worker errors in Chrome DevTools."
+      "\n\nOpen the website directly in Chrome, reload it, and check that ./manifest.webmanifest, ./sw.js and ./icons/icon-192.png load from this website path (/f2s-app/). If Chrome still says the app cannot be installed, inspect the manifest and service-worker errors in Chrome DevTools."
     );
   }, true);
 })();

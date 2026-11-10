@@ -1,32 +1,32 @@
-F2S PWA — GitHub Pages personal/user site (domain root)
+F2S PWA — GitHub Pages project-site package
 
-Configured for: https://sadek-ahmed-raj.github.io/
+Target website:
+https://sadek-ahmed-raj.github.io/f2s-app/
 
-Upload the CONTENTS of this package to the ROOT of the repository named
-sadek-ahmed-raj.github.io. Do not put these files inside another folder.
+IMPORTANT: Upload the CONTENTS of this package to the ROOT of the GitHub
+repository named f2s-app (not into a nested folder).
 
-Required layout:
+Required root structure:
   index.html
   manifest.webmanifest
   sw.js
   icons/icon-192.png
   icons/icon-512.png
 
-After commit and GitHub Pages deployment, open each URL directly:
-  https://sadek-ahmed-raj.github.io/manifest.webmanifest
-  https://sadek-ahmed-raj.github.io/sw.js
-  https://sadek-ahmed-raj.github.io/icons/icon-192.png
-  https://sadek-ahmed-raj.github.io/icons/icon-512.png
+Deployment steps:
+1. Open https://github.com/sadek-ahmed-raj/f2s-app
+2. Confirm GitHub Pages publishes the intended branch/folder (usually main / root).
+3. Replace index.html with this package's index.html.
+4. Upload manifest.webmanifest, sw.js, and the icons folder into repository root.
+5. Commit and wait for GitHub Pages deployment.
 
-All four must load from the same domain without 404 or a GitHub error page.
-Then open https://sadek-ahmed-raj.github.io/ in Chrome, reload, wait 5–10 seconds,
-and check Chrome > Settings > Site settings > All sites > sadek-ahmed-raj.github.io
-for service-worker/site data status if installation still fails.
+Verify these exact URLs:
+https://sadek-ahmed-raj.github.io/f2s-app/manifest.webmanifest
+https://sadek-ahmed-raj.github.io/f2s-app/sw.js
+https://sadek-ahmed-raj.github.io/f2s-app/icons/icon-192.png
+https://sadek-ahmed-raj.github.io/f2s-app/icons/icon-512.png
 
-This v3 worker intentionally does not require caching the 6 MB HTML file during
-its install event. Optional app-shell caching failures therefore cannot prevent
-worker activation. API/auth/realtime requests remain network-only.
+All four must load without 404. Then open the website directly in Chrome,
+reload, wait a few seconds, and try More > Install F2S App or Chrome menu > Install app.
 
-Supabase login, realtime, submissions and other server-backed features still
-require internet. A successful service worker alone does not guarantee Chrome
-installability; the live manifest and icons must also be valid and same-origin.
+Do not upload these files to sadek-ahmed-raj.github.io root for this project site.
