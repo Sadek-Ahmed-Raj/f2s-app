@@ -1,32 +1,32 @@
 F2S PWA — GitHub Pages personal/user site (domain root)
 
-This package is configured for:
-https://sadek-ahmed-raj.github.io/
+Configured for: https://sadek-ahmed-raj.github.io/
 
-IMPORTANT: Upload the CONTENTS of this folder to the ROOT of the GitHub
-repository named sadek-ahmed-raj.github.io. Do not upload the containing
-F2S_Leaderboard_PWA folder as a nested directory.
+Upload the CONTENTS of this package to the ROOT of the repository named
+sadek-ahmed-raj.github.io. Do not put these files inside another folder.
 
-Required repository-root layout:
+Required layout:
   index.html
   manifest.webmanifest
   sw.js
   icons/icon-192.png
   icons/icon-512.png
 
-After committing and waiting for GitHub Pages deployment, test these exact URLs:
+After commit and GitHub Pages deployment, open each URL directly:
   https://sadek-ahmed-raj.github.io/manifest.webmanifest
   https://sadek-ahmed-raj.github.io/sw.js
   https://sadek-ahmed-raj.github.io/icons/icon-192.png
   https://sadek-ahmed-raj.github.io/icons/icon-512.png
 
-Each must load from the same domain (no 404, no GitHub HTML error page).
-Then open https://sadek-ahmed-raj.github.io/ directly in Chrome, reload once,
-wait a few seconds, and check Chrome menu > Install app.
+All four must load from the same domain without 404 or a GitHub error page.
+Then open https://sadek-ahmed-raj.github.io/ in Chrome, reload, wait 5–10 seconds,
+and check Chrome > Settings > Site settings > All sites > sadek-ahmed-raj.github.io
+for service-worker/site data status if installation still fails.
 
-If Chrome still says "This app cannot be installed", the live deployment must
-be inspected in Chrome DevTools > Application > Manifest and Service Workers.
-This package cannot confirm what is currently deployed to GitHub Pages.
+This v3 worker intentionally does not require caching the 6 MB HTML file during
+its install event. Optional app-shell caching failures therefore cannot prevent
+worker activation. API/auth/realtime requests remain network-only.
 
-Offline caching is a basic shell fallback only. Supabase login, realtime,
-submissions and other server-backed features still require internet.
+Supabase login, realtime, submissions and other server-backed features still
+require internet. A successful service worker alone does not guarantee Chrome
+installability; the live manifest and icons must also be valid and same-origin.
