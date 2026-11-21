@@ -2030,6 +2030,8 @@ img[alt*="Leaderboard"]{
 .f2s-global-calendar-grid .f2s-global-day{position:relative;min-height:54px;overflow:hidden}
 .f2s-global-calendar-grid .f2s-global-day.global-checked{border-color:#68b98b55;background:linear-gradient(145deg,#68b98b20,#68b98b08);color:#a6e5bb;box-shadow:inset 0 0 18px #68b98b0b,0 0 12px #68b98b12}
 .f2s-global-calendar-grid .f2s-global-day.global-checked .mark{color:#8fe0ac;text-shadow:0 0 9px #68b98b55}
+.f2s-global-day.f2s-only-done:not(.global-checked){border-color:#68b98b24;background:linear-gradient(145deg,#68b98b0d,#68b98b04);color:#7d9686;opacity:.8}
+.f2s-global-day.f2s-only-done:not(.global-checked) .mark{color:#6f8f7c;text-shadow:none}
 .f2s-global-calendar-grid .f2s-global-day.global-actionable:not(.global-checked){border-color:#d9a75566;box-shadow:inset 0 0 0 1px #d9a75516}
 .f2s-global-calendar-grid .f2s-global-day.global-readonly:not(.global-checked){opacity:.62}
 .f2s-chain-dots{position:absolute;bottom:4px;left:0;right:0;display:flex;justify-content:center;gap:3px}
@@ -15512,12 +15514,13 @@ async function loadF2SDailyAyahCard(){
     const n=i-offset+1;if(n<1||n>daysInMonth)return '<span class="f2s-ch-day-empty"></span>';
     const date=month+'-'+String(n).padStart(2,'0'),d=byDate[date]||{};
     const future=!!d.is_future,readOnly=!!d.is_read_only,done=!!d.checked;
+    let f2sOnly=false;try{f2sOnly=!done&&!future&&window.__f2sGetStudyDayData?.(date)?.checkins?.f2sDone===true}catch(_){}
     const dayChains=chains.filter(c=>date>=chainStart(c)&&date<=chainEnd(c));
     const chainDots=dayChains.slice(0,4).map(c=>{const idx=Math.max(0,chains.indexOf(c));return `<i class="f2s-chain-dot chain-${idx%4}"></i>`}).join('');
     const isExamDate=!!examDate&&date===examDate;
-    const classes=['f2s-ch-day','f2s-global-day',done?'global-checked':'',d.is_actionable?'global-actionable':'',future?'upcoming':'',selected===date?'selected':'',readOnly?'global-readonly':'',isExamDate?'f2s-exam-date':'',window.__f2sFlags?.hasDayOff(date)?'f2s-dayoff-day':''].filter(Boolean).join(' ');
+    const classes=['f2s-ch-day','f2s-global-day',done?'global-checked':'',f2sOnly?'f2s-only-done':'',d.is_actionable?'global-actionable':'',future?'upcoming':'',selected===date?'selected':'',readOnly?'global-readonly':'',isExamDate?'f2s-exam-date':'',window.__f2sFlags?.hasDayOff(date)?'f2s-dayoff-day':''].filter(Boolean).join(' ');
     const dayStudyTime=f2sFormatStudyDuration(d);
-    return `<button type="button" class="${classes}" data-global-day="${date}" title="${date}${isExamDate?' · EXAM DATE':''}${dayStudyTime?' · Study '+dayStudyTime:''}" aria-label="${date}${isExamDate?', exam date':''}${done?', checked':''}${dayStudyTime?', study time '+dayStudyTime:''}${dayChains.length?', challenge day':''}"><span class="mark">${isExamDate?'!':done?'✓':window.__f2sFlags?.hasDayOff(date)?'☾':d.is_actionable?'○':future?'·':'—'}</span><span>${n}</span><span class="f2s-chain-dots">${chainDots}</span></button>`;
+    return `<button type="button" class="${classes}" data-global-day="${date}" title="${date}${isExamDate?' · EXAM DATE':''}${dayStudyTime?' · Study '+dayStudyTime:''}" aria-label="${date}${isExamDate?', exam date':''}${done?', checked':''}${f2sOnly?', F2S mandatory tasks done':''}${dayStudyTime?', study time '+dayStudyTime:''}${dayChains.length?', challenge day':''}"><span class="mark">${isExamDate?'!':done?'✓':f2sOnly?'✓':window.__f2sFlags?.hasDayOff(date)?'☾':d.is_actionable?'○':future?'·':'—'}</span><span>${n}</span><span class="f2s-chain-dots">${chainDots}</span></button>`;
   }).join('');
   const openText=data.window_open?'OPEN NOW':'CLOSED';
   const closeOffset=Number(data.close_day_offset||0)===1?'next day':'same day';
@@ -15528,7 +15531,7 @@ async function loadF2SDailyAyahCard(){
     <div class="f2s-ch-monthbar"><button class="f2s-ch-btn" id="chPrevMonth" type="button" aria-label="Previous month">‹</button><strong>${monthName}</strong><button class="f2s-ch-btn" id="chNextMonth" type="button" aria-label="Next month" ${key(next)>now.slice(0,7)?'disabled':''}>›</button></div>
     <div class="f2s-ch-weekdays"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
     <div class="f2s-ch-calendar f2s-ch-month-calendar f2s-global-calendar-grid">${dayCells}</div>
-    <div class="f2s-ch-calendar-legend f2s-global-legend"><span><i class="f2s-ch-dot" style="background:#e05b5b"></i>Exam date</span><span><i class="f2s-ch-dot" style="background:#68b98b"></i>Checked in</span><span><i class="f2s-ch-dot" style="background:#8d8d8d"></i>Day off</span><span><i class="f2s-ch-dot" style="background:#d9a755"></i>Challenge period</span>${checked&&selected===data.active_checkin_date?'<button class="f2s-global-share-card" id="f2sGlobalShareCard" type="button" aria-label="Share T5 completion card" title="Share completion card"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V3m0 0L7 8m5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button>':''}</div>
+    <div class="f2s-ch-calendar-legend f2s-global-legend"><span><i class="f2s-ch-dot" style="background:#e05b5b"></i>Exam date</span><span><i class="f2s-ch-dot" style="background:#68b98b"></i>Checked in</span><span><i class="f2s-ch-dot" style="background:#68b98b55"></i>F2S done only</span><span><i class="f2s-ch-dot" style="background:#8d8d8d"></i>Day off</span><span><i class="f2s-ch-dot" style="background:#d9a755"></i>Challenge period</span>${checked&&selected===data.active_checkin_date?'<button class="f2s-global-share-card" id="f2sGlobalShareCard" type="button" aria-label="Share T5 completion card" title="Share completion card"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V3m0 0L7 8m5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button>':''}</div>
     <div class="f2s-global-selected"><div><div class="f2s-ch-kicker">SELECTED DAY · ${esc(selected)}</div><h3 style="${checked?'white-space:nowrap;':''}">${checked?'Alhamdulillah T5 done':selected===now?'Alhamdulillah T5 done':esc(selected)}</h3>${checked?`<div style="margin-top:4px;display:flex;align-items:center;gap:6px;white-space:nowrap;color:#b9ad91;font-size:12px;line-height:1.35"><span style="color:#c7ad7b;font-size:10px;font-weight:650;letter-spacing:.06em">STUDY TIME</span><strong style="color:#e8d5ad;font-size:13px;font-variant-numeric:tabular-nums;font-weight:700">${selectedStudyTime||'00:00:00'}</strong></div>`:`<p class="f2s-ch-note">${actionable?'Complete all T5 requirements and F2S mandatory tasks in Study → Tasks. Today’s timer total will be used automatically.':selectedDay.is_future?'Future dates cannot be checked in.':'Past dates are read-only; select a checked date to review its study time.'}</p>`}</div>
       <div class="f2s-global-actions">${checked&&actionable?'<button class="f2s-ch-btn f2s-global-uncheck" id="f2sGlobalUncheck" type="button">Uncheck today</button>':`<button class="f2s-ch-btn primary" id="f2sGlobalCheck" type="button" ${actionable&&!checked?'':'disabled'}>✓ Check in</button>`}</div>
     </div>
@@ -15716,22 +15719,8 @@ function bindCalendar(){
     const t5Qualified=regularT5||fajrException;
     const prayerMandatory=t5Qualified||(c.fajr===true&&['dhuhr','asr','maghrib','isha'].filter(k=>c[k]===true).length>=2);
     const mandatory={prayer:prayerMandatory,quran: c.quran3===true||c.quran5===true,todo:c.todoSubmitted===true,teli:c.teliSubmitted===true,fdami:c.fdami===true};
-    const missing=[];
-    if(!t5Qualified){
-      if(!c.fajrStart&&!c.fajrQaza)missing.push('Start with Fajr (or the Fajr Qaza exception)');
-      if(!allFiveOnTime&&!fajrException)missing.push('All 5 Salah on time');
-      if(seconds<(c.fajrQaza?28800:18000))missing.push(c.fajrQaza?'8 hours of study for the Fajr exception':'5 hours of study');
-      if(!c.quran5)missing.push('5 Qur’an verses');
-    }
-    if(!mandatory.prayer)missing.push('3 on-time Waqts including Fajr');
-    if(!mandatory.quran)missing.push('Qur’an · 3 verses');
-    if(!mandatory.todo)missing.push('To-Do List submitted');
-    if(!mandatory.teli)missing.push('Teli Task submitted');
-    if(!mandatory.fdami)missing.push('FDAMI completed');
-    if(missing.length){
-      const message='Complete these before T5 check-in:\n• '+missing.join('\n• ');
-      throw new Error(message);
-    }
+    if(!t5Qualified)throw new Error('Complete your T5 tasks first, then check in.');
+    if(!mandatory.prayer||!mandatory.quran||!mandatory.todo||!mandatory.teli||!mandatory.fdami)throw new Error('Complete the F2S mandatory tasks first, then check in.');
     return seconds;
   };
   const check=$('f2sGlobalCheck');
@@ -29100,7 +29089,7 @@ body.f2s-study-system-open #f2sStudySystemPage{display:block}
    <div class="f2ss-task-goal-progress" id="f2ssTaskGoalProgress" hidden><div class="f2ss-task-goal-head"><span id="f2ssTaskGoalName">TASK DURATION</span><strong id="f2ssTaskGoalPct">0%</strong></div><div class="f2ss-task-goal-track"><i id="f2ssTaskGoalFill"></i></div><div class="f2ss-task-goal-foot"><span id="f2ssTaskGoalElapsed">00:00 / 00:00</span><span>Task duration</span></div></div>
   </section>
   <section id="f2sInlineDefaultRoom" class="f2s-inline-default-room" hidden><div class="f2s-inline-room-head"><span>🌿 F2sians · LIVE STUDY</span><small id="f2sInlineRoomCounts">Connecting…</small></div><div id="f2sInlineRoomPeople" class="f2s-inline-room-grid"></div></section>
-  <div class="f2ss-goal-modal" id="f2ssGoalModal" role="dialog" aria-modal="true" aria-labelledby="f2ssGoalModalTitle"><div class="f2ss-goal-dialog"><div class="f2ss-goal-dialog-head"><div><h3 id="f2ssGoalModalTitle">Daily Goal Settings</h3><p>Customize your daily study targets.</p></div><button type="button" id="f2ssGoalClose" class="f2ss-goal-close" aria-label="Close">×</button></div><div class="f2ss-goal-setting-row"><label for="f2ssNormalGoalInput">Daily Goal</label><div><input id="f2ssNormalGoalInput" type="number" min="0.25" max="24" step="0.25" value="5"><small>Hours · Default 5h</small></div></div><div class="f2ss-goal-setting-row"><label for="f2ssQazaGoalInput">Fajr Qaza Goal</label><div><input id="f2ssQazaGoalInput" type="number" min="0.25" max="24" step="0.25" value="8"><small>Hours · Default 8h</small></div></div><div class="f2ss-goal-modal-actions"><button type="button" id="f2ssGoalReset" class="f2ss-goal-reset">Reset defaults</button><button type="button" id="f2ssGoalSave" class="f2ss-goal-save">Save goals</button></div></div></div>
+  <div class="f2ss-goal-modal" id="f2ssGoalModal" role="dialog" aria-modal="true" aria-labelledby="f2ssGoalModalTitle"><div class="f2ss-goal-dialog"><div class="f2ss-goal-dialog-head"><div><h3 id="f2ssGoalModalTitle">Daily Goal Settings</h3><p>Your personal study goal. It only affects your timer card and statistics.</p></div><button type="button" id="f2ssGoalClose" class="f2ss-goal-close" aria-label="Close">×</button></div><div class="f2ss-goal-setting-row"><label for="f2ssNormalGoalInput">Daily Goal</label><div><input id="f2ssNormalGoalInput" type="number" min="0.25" max="24" step="0.25" value="5"><small>Hours · Default 5h</small></div></div><div class="f2ss-goal-modal-actions"><button type="button" id="f2ssGoalReset" class="f2ss-goal-reset">Reset defaults</button><button type="button" id="f2ssGoalSave" class="f2ss-goal-save">Save goals</button></div></div></div>
   <div class="f2ss-pomo-modal" id="f2ssPomoModal" role="dialog" aria-modal="true" aria-labelledby="f2ssPomoTitle">
    <div class="f2ss-pomo-dialog"><div class="f2ss-pomo-dialog-head"><div><h3 id="f2ssPomoTitle">Pomodoro Settings</h3><p>Set your focus and break duration.</p></div><button type="button" class="f2ss-pomo-x" id="f2ssPomoCancel" aria-label="Close">×</button></div><div class="f2ss-duration-card"><b>FOCUS TIME</b><div class="f2ss-duration-units" data-duration="focus"><div><button type="button" data-unit="h" data-step="1">＋</button><strong data-value="h">00</strong><button type="button" data-unit="h" data-step="-1">−</button><small>HRS</small></div><div><button type="button" data-unit="m" data-step="1">＋</button><strong data-value="m">50</strong><button type="button" data-unit="m" data-step="-1">−</button><small>MIN</small></div><div><button type="button" data-unit="s" data-step="1">＋</button><strong data-value="s">00</strong><button type="button" data-unit="s" data-step="-1">−</button><small>SEC</small></div></div></div><div class="f2ss-duration-card"><b>BREAK TIME</b><div class="f2ss-duration-units" data-duration="break"><div><button type="button" data-unit="h" data-step="1">＋</button><strong data-value="h">00</strong><button type="button" data-unit="h" data-step="-1">−</button><small>HRS</small></div><div><button type="button" data-unit="m" data-step="1">＋</button><strong data-value="m">10</strong><button type="button" data-unit="m" data-step="-1">−</button><small>MIN</small></div><div><button type="button" data-unit="s" data-step="1">＋</button><strong data-value="s">00</strong><button type="button" data-unit="s" data-step="-1">−</button><small>SEC</small></div></div></div><div class="f2ss-pomo-actions"><button type="button" class="f2ss-pomo-cancel" id="f2ssPomoDismiss">Cancel</button><button type="button" class="f2ss-pomo-save" id="f2ssPomoSave">Save settings</button></div></div>
   </div>
@@ -29378,7 +29367,7 @@ body.f2s-study-system-open #f2sStudySystemPage{display:block}
  if(window.__f2sCloudReadyFired)setTimeout(mergeCloudState,0);
 
  const CHECKIN_KEY='f2s_personal_daily_checkins_v1';let checkinStore={};try{checkinStore=JSON.parse(localStorage.getItem(CHECKIN_KEY)||'{}')||{}}catch(e){}
- const GOAL_KEY='f2s_study_daily_goals_v1';let goalSettings={normal:18000,qaza:28800};try{goalSettings={...goalSettings,...JSON.parse(localStorage.getItem(GOAL_KEY)||'{}')}}catch(e){}const goalForCheckin=c=>Number(c?.fajrQaza?goalSettings.qaza:goalSettings.normal)||18000;const goalLabel=secs=>{const h=secs/3600;return Number.isInteger(h)?String(h).padStart(2,'0')+':00':String(Math.floor(h)).padStart(2,'0')+':'+String(Math.round((h%1)*60)).padStart(2,'0')}
+ const GOAL_KEY='f2s_study_daily_goals_v1';let goalSettings={normal:18000,qaza:28800};try{goalSettings={...goalSettings,...JSON.parse(localStorage.getItem(GOAL_KEY)||'{}')}}catch(e){}const goalForCheckin=c=>c?.fajrQaza?28800:18000;const personalGoal=()=>Math.max(900,Number(goalSettings.normal)||18000);const goalLabel=secs=>{const h=secs/3600;return Number.isInteger(h)?String(h).padStart(2,'0')+':00':String(Math.floor(h)).padStart(2,'0')+':'+String(Math.round((h%1)*60)).padStart(2,'0')}
  const checkinDate=()=> $('f2ssCheckinDate')?.value||today();
  const getCheckin=()=>{const k=checkinDate();if(!checkinStore[k])checkinStore[k]={};return checkinStore[k]};
  const saveCheckin=()=>{try{localStorage.setItem(CHECKIN_KEY,JSON.stringify(checkinStore))}catch(e){}};
@@ -29395,6 +29384,7 @@ body.f2s-study-system-open #f2sStudySystemPage{display:block}
  const totalFor=fn=>data.sessions.filter(fn).reduce((a,x)=>a+(Number(x.seconds)||0),0);
  /* Server-synced today total: the same number the main timer and group room show. */
  const serverTodayTotal=()=>{const sc=window.__f2sServerCompleted;if(!sc||sc.day!==today())return 0;return Math.max(0,Number(sc.sec)||0)+(running?Math.max(0,Math.floor((Date.now()-startedAt)/1000)):0)};
+ const syncServerAfterEdit=()=>{try{window.__f2sServerSetToday?.(totalFor(x=>x.date===today())+elapsed)}catch(_){}};
  const serverExtra=()=>{const local=totalFor(x=>x.date===today())+(elapsed+(running?Math.max(0,Math.floor((Date.now()-startedAt)/1000)):0));return Math.max(0,serverTodayTotal()-local)};
 
  let studyCalendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);
@@ -29449,7 +29439,7 @@ body.f2s-study-system-open #f2sStudySystemPage{display:block}
  function render(){
   const live=elapsed+(running?Math.max(0,Math.floor((Date.now()-startedAt)/1000)):0);
   if(pomodoro){const left=pomoSettings.focus-live;const abs=Math.abs(left);$('f2ssTimer').textContent=(left<0?'-':'')+clock(abs);$('f2ssTimer').setAttribute('aria-label',left<0?`Pomodoro overtime ${clock(abs)}`:`Pomodoro remaining ${clock(abs)}`)}else{$('f2ssTimer').textContent=clock(live);$('f2ssTimer').removeAttribute('aria-label')}
-  const todaySaved=totalFor(x=>x.date===today()),__sc=window.__f2sServerCompleted,__srv=(__sc&&__sc.day===today())?(Number(__sc.sec)||0)+(running?Math.max(0,Math.floor((Date.now()-startedAt)/1000)):0):0,todaySecs=Math.max(todaySaved+live,__srv),weekSecs=totalFor(x=>x.date>=monday()&&x.date<=today())+live+serverExtra(),dailyTarget=goalForCheckin(getCheckin()),pct=Math.min(100,todaySecs/dailyTarget*100);window.__f2sTodayStudyTotal=()=>Math.max(0,totalFor(x=>x.date===today())+current(),serverTodayTotal());window.__f2sSavedStudyTotal=()=>Math.max(0,totalFor(x=>x.date===today()));window.__f2sReconcileTotal=()=>Math.max(0,totalFor(x=>x.date===today())+elapsed);
+  const todaySaved=totalFor(x=>x.date===today()),__sc=window.__f2sServerCompleted,__srv=(__sc&&__sc.day===today())?(Number(__sc.sec)||0)+(running?Math.max(0,Math.floor((Date.now()-startedAt)/1000)):0):0,todaySecs=Math.max(todaySaved+live,__srv),weekSecs=totalFor(x=>x.date>=monday()&&x.date<=today())+live+serverExtra(),dailyTarget=personalGoal(),pct=Math.min(100,todaySecs/dailyTarget*100);window.__f2sTodayStudyTotal=()=>Math.max(0,totalFor(x=>x.date===today())+current(),serverTodayTotal());window.__f2sSavedStudyTotal=()=>Math.max(0,totalFor(x=>x.date===today()));window.__f2sReconcileTotal=()=>Math.max(0,totalFor(x=>x.date===today())+elapsed);
   if(!pomodoro){$('f2ssTimer').textContent=clock(todaySecs);$('f2ssTimer').setAttribute('aria-label','Total study time today '+clock(todaySecs));}
   renderStudyCalendar();
   $('f2ssProgress').style.width=pct+'%';$('f2ssProgressLabel').textContent=Math.floor(pct)+'% of '+(dailyTarget/3600)+'-hour daily goal';$('f2ssRemaining').textContent=todaySecs>=dailyTarget?'Daily goal reached':short(dailyTarget-todaySecs)+' remaining';$('f2ssDailyGoalDisplay').textContent='DAILY GOAL · '+goalLabel(dailyTarget)+' HRS';
@@ -29576,7 +29566,7 @@ body.f2s-study-system-open #f2sStudySystemPage{display:block}
   $('f2ssSessionsDateLabel').textContent=statsDateLabel.toUpperCase();
   {const b=$('f2ssDeleteTodayAll');if(b){const n=statsDate===today()?selectedSessions.length+((pausedSegs.length>0||elapsed>0||running||serverExtra()>0)?1:0):0;b.hidden=!n;if(n)b.textContent='🗑 Delete all today\'s study time'}}
   const __rowU=__unsavedOn?`<div class="f2ss-session"><div class="f2ss-session-main"><b>Current session · not saved yet</b><small>${running?'Running now':'Paused'} · press ■ to save it to the log</small></div><strong>${short(current())}</strong></div>`:'';
-  const __rowS=__srvExtra>0?`<div class="f2ss-session"><div class="f2ss-session-main"><b>Synced from your account</b><small>Study time recorded on another device or the server</small></div><strong>${short(__srvExtra)}</strong></div>`:'';
+  const __rowS=__srvExtra>0?`<div class="f2ss-session"><div class="f2ss-session-main"><b>Synced from your account</b><small>Study time recorded on another device or the server</small></div><strong>${short(__srvExtra)}</strong><button type="button" class="f2ss-btn subtle" data-synced-remove="1" style="margin-left:10px">Remove</button></div>`:'';
   $('f2ssSessions').innerHTML=(__rowU||__rowS)&&!selectedSessions.length?__rowU+__rowS:(selectedSessions.length?__rowU+__rowS:'')+(selectedSessions.length?selectedSessions.map(x=>`<div class="f2ss-session"><div class="f2ss-session-main"><b>${escapeHtml(x.subject||'Focused study')}</b><small>${sessionTimeLabel(x)}</small></div><strong>${short(x.seconds)}</strong><div class="f2ss-task-menu-wrap"><button type="button" class="f2ss-task-menu" data-session-menu="${x._index}" aria-label="Study log options">⋮</button><div class="f2ss-task-menu-pop" data-session-pop="${x._index}"><button type="button" data-session-edit="${x._index}">Edit study log</button><button type="button" data-session-delete="${x._index}" style="color:#e4a39b!important">Delete study log</button></div></div></div>`).join(''):'<div class="f2ss-empty">No study sessions saved for this date.</div>');
  }
  const sessionLogRoot=$('f2ssSessions');
@@ -29629,11 +29619,16 @@ body.f2s-study-system-open #f2sStudySystemPage{display:block}
     };
     modal.querySelectorAll('[data-log-clock]').forEach(btn=>btn.addEventListener('click',()=>openLogClock(btn.dataset.logClock)));
     const close=()=>{document.getElementById('f2ssLogClockLayer')?.remove();modal.remove()};modal.querySelector('[data-log-cancel]').onclick=close;modal.addEventListener('click',ev=>{if(ev.target===modal)close()});
-    modal.querySelector('form').onsubmit=ev=>{ev.preventDefault();const fd=new FormData(ev.currentTarget),subject=String(fd.get('subject')||'').trim(),date=String(fd.get('date')||''),startTime=String(fd.get('startTime')||''),endTime=String(fd.get('endTime')||'');if(!subject||!date||!startTime||!endTime){toast('Enter a valid title, date, start time and end time.');return;}const startStamp=localDateTimeStamp(date,startTime);let endStamp=localDateTimeStamp(date,endTime);if(!Number.isFinite(startStamp)||!Number.isFinite(endStamp)){toast('Enter valid date and times.');return;}if(endStamp<=startStamp)endStamp+=86400000;const seconds=Math.round((endStamp-startStamp)/1000);if(seconds<60){toast('Study log duration must be at least one minute.');return;}data.sessions[idx]={...item,subject,date,seconds,startedAt:startStamp,at:endStamp};save();close();render();toast('Study log updated.');};
+    modal.querySelector('form').onsubmit=ev=>{ev.preventDefault();const fd=new FormData(ev.currentTarget),subject=String(fd.get('subject')||'').trim(),date=String(fd.get('date')||''),startTime=String(fd.get('startTime')||''),endTime=String(fd.get('endTime')||'');if(!subject||!date||!startTime||!endTime){toast('Enter a valid title, date, start time and end time.');return;}const startStamp=localDateTimeStamp(date,startTime);let endStamp=localDateTimeStamp(date,endTime);if(!Number.isFinite(startStamp)||!Number.isFinite(endStamp)){toast('Enter valid date and times.');return;}if(endStamp<=startStamp)endStamp+=86400000;const seconds=Math.round((endStamp-startStamp)/1000);if(seconds<60){toast('Study log duration must be at least one minute.');return;}data.sessions[idx]={...item,subject,date,seconds,startedAt:startStamp,at:endStamp};save();close();render();if(date===today()||item.date===today())syncServerAfterEdit();toast('Study log updated.');};
     return;
    }
    const del=e.target.closest('[data-session-delete]');
-   if(del){const idx=Number(del.dataset.sessionDelete),item=data.sessions[idx];if(!item)return;sessionLogRoot.querySelectorAll('.f2ss-task-menu-pop').forEach(x=>x.classList.remove('open'));if(!confirm('Delete this study log? This will also update your study statistics.'))return;if(item.at)(data.deletedSessions=data.deletedSessions||[]).push(item.at);data.sessions.splice(idx,1);save();render();toast('Study log deleted.');}
+   if(del){const idx=Number(del.dataset.sessionDelete),item=data.sessions[idx];if(!item)return;sessionLogRoot.querySelectorAll('.f2ss-task-menu-pop').forEach(x=>x.classList.remove('open'));if(!confirm('Delete this study log? This will also update your study statistics.'))return;if(item.at)(data.deletedSessions=data.deletedSessions||[]).push(item.at);data.sessions.splice(idx,1);save();render();if(item.date===today())syncServerAfterEdit();toast('Study log deleted.');}
+  });
+  document.addEventListener('click',e=>{
+   const b=e.target.closest&&e.target.closest('[data-synced-remove]');if(!b)return;
+   if(!confirm('Remove this synced time from your account total? Your saved sessions stay.'))return;
+   syncServerAfterEdit();toast('Synced time removed.');setTimeout(()=>{try{render()}catch(_){}},800);
   });
   $('f2ssDeleteTodayAll')?.addEventListener('click',()=>{
    const day=today(),mine=data.sessions.filter(x=>x.date===day);
@@ -29672,7 +29667,7 @@ body.f2s-study-system-open #f2sStudySystemPage{display:block}
       const startStamp=localDateTimeStamp(logDate,start);let endStamp=localDateTimeStamp(logDate,end);if(endStamp<=startStamp)endStamp+=86400000;
       const seconds=Math.round((endStamp-startStamp)/1000);if(seconds<60){toast('Log duration must be at least one minute.');return}
       const item={subject,date:logDate,seconds,startedAt:startStamp,at:endStamp};
-      if(kind==='study'){if(isEdit)data.sessions[editIndex]={...data.sessions[editIndex],...item};else data.sessions.push(item)}
+      if(kind==='study'){if(isEdit)data.sessions[editIndex]={...data.sessions[editIndex],...item};else data.sessions.push(item);if(item.date===today()||date===today())setTimeout(syncServerAfterEdit,0)}
       else {if(isEdit)data.breaks[editIndex]={...data.breaks[editIndex],...item};else data.breaks.push(item)}
       save();close();render();toast(`${kind==='study'?'Study':'Break'} log ${isEdit?'updated':'added'}.`);
     };
@@ -29717,14 +29712,15 @@ body.f2s-study-system-open #f2sStudySystemPage{display:block}
  window.addEventListener('f2s:server-timer-updated',()=>{try{render()}catch(_){}});
  window.__f2sMainTimerResume=(startMs)=>{if(running)return false;startMs=Number(startMs);if(!startMs||startMs>Date.now())return false;window.__f2sPrayerActivityActive=false;running=true;startedAt=startMs;tick=setInterval(render,500);window.__f2sGroupActivity?.('studying');render();window.__f2sPersistMainTimer?.();return true};
  function start(){if(running)return;if(window.__f2sPrayerActivityActive){window.__f2sPrayerActivityActive=false;document.getElementById('f2ssPrayer')?.classList.remove('on')}running=true;startedAt=Date.now();tick=setInterval(render,500);window.__f2sGroupActivity?.('studying');render();window.__f2sPersistMainTimer?.()}
- function pause(){if(!running)return;{const _seg=Math.max(0,Math.floor((Date.now()-startedAt)/1000));if(_seg>=1)pausedSegs.push({start:startedAt,end:Date.now(),seconds:_seg,subject:activeTaskText||'Focused study',color:activeTaskColor||''})}window.__f2sPendingStopSec=(Number(window.__f2sPendingStopSec)||0)+Math.max(0,Math.floor((Date.now()-startedAt)/1000));elapsed=current();running=false;clearInterval(tick);window.__f2sGroupActivity?.('break');render();window.__f2sPersistMainTimer?.()}
+ function pause(){if(!running)return;window.__f2sLastStopAt=Date.now();{const _seg=Math.max(0,Math.floor((Date.now()-startedAt)/1000));if(_seg>=1)pausedSegs.push({start:startedAt,end:Date.now(),seconds:_seg,subject:activeTaskText||'Focused study',color:activeTaskColor||''})}window.__f2sPendingStopSec=(Number(window.__f2sPendingStopSec)||0)+Math.max(0,Math.floor((Date.now()-startedAt)/1000));elapsed=current();running=false;clearInterval(tick);window.__f2sGroupActivity?.('break');render();window.__f2sPersistMainTimer?.()}
  function reset(){pause();elapsed=0;pausedSegs=[];render();window.__f2sPersistMainTimer?.()}
  function finish(){const seconds=current();if(seconds<1)return;pause();data.sessions.push({subject:activeTaskText||'Focused study',seconds,date:today(),at:Date.now(),color:activeTaskColor||taskColorForSubject(activeTaskText,today())||''});save();elapsed=0;pausedSegs=[];activeTaskText='';activeTaskColor='';render();window.__f2sPersistMainTimer?.();toast('Study session saved on this device.')}
  /* F2S: persist the main timer so a locked screen / discarded tab / reload never loses or restarts it. */
  (function(){const K='f2s_main_timer_v2',MAX=6*3600*1000;
-  const save2=()=>{try{localStorage.setItem(K,JSON.stringify({day:today(),running,startedAt,elapsed,seen:Date.now(),segs:pausedSegs,task:activeTaskText,color:activeTaskColor,pend:Number(window.__f2sPendingStopSec)||0}))}catch(_){}};
+  const save2=()=>{try{localStorage.setItem(K,JSON.stringify({day:today(),running,startedAt,elapsed,seen:Date.now(),stopAt:Number(window.__f2sLastStopAt)||0,segs:pausedSegs,task:activeTaskText,color:activeTaskColor,pend:Number(window.__f2sPendingStopSec)||0}))}catch(_){}};
   window.__f2sPersistMainTimer=save2;
   try{const st=JSON.parse(localStorage.getItem(K)||'null');
+   if(st&&Number(st.stopAt)>0)window.__f2sLastStopAt=Math.max(Number(window.__f2sLastStopAt)||0,Number(st.stopAt)||0);
    const fresh=st&&st.running&&Number(st.startedAt)>0&&Number(st.startedAt)<=Date.now()&&(Date.now()-Number(st.seen||0))<=MAX;
    /* a timer still running past midnight must survive a reload; a paused leftover from another day is dropped */
    if(st&&!running&&(st.day===today()||fresh)){
@@ -29773,7 +29769,7 @@ body.f2s-study-system-open #f2sStudySystemPage{display:block}
  $('f2ssTaskTimers').addEventListener('keydown',e=>{if(e.key==='Escape')closeTaskDialog()});
  $('f2ssOpenAddTask').addEventListener('click',()=>openTaskDialog('add',-1,'todo'));$('f2ssOpenPlannerAddTask').addEventListener('click',()=>openTaskDialog('add',-1,'planner'));$('f2ssOpenTimerAddTask').addEventListener('click',()=>openTaskDialog('add',-1,'timer'));
  $('f2ssCheckinDate').value=today();$('f2ssCheckinDate').addEventListener('change',renderCheckins);
- const goalModal=$('f2ssGoalModal');const closeGoalModal=()=>goalModal.classList.remove('open');$('f2ssGoalSettingsOpen').addEventListener('click',()=>{$('f2ssNormalGoalInput').value=goalSettings.normal/3600;$('f2ssQazaGoalInput').value=goalSettings.qaza/3600;goalModal.classList.add('open')});$('f2ssGoalClose').onclick=closeGoalModal;goalModal.addEventListener('click',e=>{if(e.target===goalModal)closeGoalModal()});$('f2ssGoalSave').onclick=()=>{const normal=Number($('f2ssNormalGoalInput').value),qaza=Number($('f2ssQazaGoalInput').value);if(!Number.isFinite(normal)||normal<.25||normal>24||!Number.isFinite(qaza)||qaza<.25||qaza>24){toast('Goals must be between 0.25 and 24 hours.');return}goalSettings={normal:Math.round(normal*3600),qaza:Math.round(qaza*3600)};localStorage.setItem(GOAL_KEY,JSON.stringify(goalSettings));closeGoalModal();renderCheckins();render();toast('Daily goals saved.')};$('f2ssGoalReset').onclick=()=>{goalSettings={normal:18000,qaza:28800};localStorage.setItem(GOAL_KEY,JSON.stringify(goalSettings));$('f2ssNormalGoalInput').value=5;$('f2ssQazaGoalInput').value=8;renderCheckins();render();toast('Default goals restored.')};
+ const goalModal=$('f2ssGoalModal');const closeGoalModal=()=>goalModal.classList.remove('open');$('f2ssGoalSettingsOpen').addEventListener('click',()=>{$('f2ssNormalGoalInput').value=personalGoal()/3600;goalModal.classList.add('open')});$('f2ssGoalClose').onclick=closeGoalModal;goalModal.addEventListener('click',e=>{if(e.target===goalModal)closeGoalModal()});$('f2ssGoalSave').onclick=()=>{const normal=Number($('f2ssNormalGoalInput').value);if(!Number.isFinite(normal)||normal<.25||normal>24){toast('Goal must be between 0.25 and 24 hours.');return}goalSettings={normal:Math.round(normal*3600)};localStorage.setItem(GOAL_KEY,JSON.stringify(goalSettings));closeGoalModal();render();toast('Your daily goal is saved.')};$('f2ssGoalReset').onclick=()=>{goalSettings={normal:18000};localStorage.setItem(GOAL_KEY,JSON.stringify(goalSettings));$('f2ssNormalGoalInput').value=5;render();toast('Default goal restored.')};
  $('f2sStudySystemPage').addEventListener('change',e=>{const input=e.target.closest('input[data-checkin]');if(!input)return;const c=getCheckin();c[input.dataset.checkin]=input.checked;if(input.dataset.checkin==='fajr'&&input.checked)c.fajrQaza=false;if(input.dataset.checkin==='fajrQaza'&&input.checked)c.fajr=false;saveCheckin();renderCheckins();render();});
  $('f2ssCheckinReset').addEventListener('click',()=>{if(!confirm('Reset all check-ins for this date?'))return;delete checkinStore[checkinDate()];saveCheckin();renderCheckins()});
   function updateDoneCheckinButtons(){
@@ -31610,13 +31606,13 @@ body.f2s-education-room-open #f2sEducationGroups .eg-wrap{padding:0 10px!importa
  const EG_CHAT_RETENTION_MS=72*60*60*1000,EG_CHAT_PAGE_SIZE=30;let egChatOldest=0,egChatLoadingOlder=false,egChatHasOlder=true;
  function egChatTrim(){const cutoff=Date.now()-EG_CHAT_RETENTION_MS;egMsgs=egMsgs.filter(m=>Number(m.at)>=cutoff).slice(-EG_CHAT_PAGE_SIZE);try{localStorage.setItem(egChatKey(),JSON.stringify(egMsgs))}catch(_){}}
  async function egChatLoadServer(){const client=window.f2sSupabase;if(!client||!egGroup)return;const cutoff=Date.now()-EG_CHAT_RETENTION_MS;try{const {data,error}=await client.from('f2s_group_chat_messages').select('id,who,name,text,at_ms,reactions').eq('group_id',String(egGroup.id)).gte('at_ms',cutoff).order('at_ms',{ascending:false}).limit(EG_CHAT_PAGE_SIZE);if(error)throw error;const rows=data||[];egMsgs=rows.reverse().map(m=>({id:String(m.id),who:m.who,name:m.name,text:m.text,at:Number(m.at_ms),reactions:m.reactions||{}}));egChatOldest=egMsgs[0]?.at||0;egChatHasOlder=rows.length===EG_CHAT_PAGE_SIZE;egChatTrim();egRenderChat()}catch(e){console.warn('F2S chat server load:',e);}}
- async function egChatLoadOlder(){const client=window.f2sSupabase;if(!client||!egGroup||egChatLoadingOlder||!egChatOldest||!egChatHasOlder)return;egChatLoadingOlder=true;try{const cutoff=Date.now()-EG_CHAT_RETENTION_MS;const {data,error}=await client.from('f2s_group_chat_messages').select('id,who,name,text,at_ms,reactions').eq('group_id',String(egGroup.id)).gte('at_ms',cutoff).lt('at_ms',egChatOldest).order('at_ms',{ascending:false}).limit(EG_CHAT_PAGE_SIZE);if(error)throw error;const rows=data||[],older=rows.reverse().map(m=>({id:String(m.id),who:m.who,name:m.name,text:m.text,at:Number(m.at_ms),reactions:m.reactions||{}}));egChatHasOlder=rows.length===EG_CHAT_PAGE_SIZE;if(older.length){egMsgs=[...older,...egMsgs].slice(-100);egChatOldest=egMsgs[0]?.at||0;try{localStorage.setItem(egChatKey(),JSON.stringify(egMsgs))}catch(_){}egRenderChat(false)}}catch(e){console.warn('Load older chat:',e)}finally{egChatLoadingOlder=false}}
- async function egChatSaveServer(m){const client=window.f2sSupabase;if(!client||!egGroup)return false;try{const {error}=await client.from('f2s_group_chat_messages').upsert({id:String(m.id),group_id:String(egGroup.id),who:m.who,name:m.name,text:m.text,at_ms:Number(m.at),reactions:m.reactions||{}},{onConflict:'id'});if(error)throw error;return true}catch(e){console.warn('F2S chat server save:',e);return false}}
+ async function egChatLoadOlder(){const client=window.f2sSupabase;if(!client||!egGroup||egChatLoadingOlder||!egChatOldest||!egChatHasOlder)return;egChatLoadingOlder=true;try{const cutoff=Date.now()-EG_CHAT_RETENTION_MS;const {data,error}=await client.from('f2s_group_chat_messages').select('id,who,name,text,at_ms,reactions').eq('group_id',String(egGroup.id)).gte('at_ms',cutoff).lt('at_ms',egChatOldest).order('at_ms',{ascending:false}).limit(EG_CHAT_PAGE_SIZE);if(error)throw error;const rows=data||[],older=rows.reverse().map(m=>({id:String(m.id),who:m.who,name:m.name,text:m.text,at:Number(m.at_ms),reactions:m.reactions||{}}));egChatHasOlder=rows.length===EG_CHAT_PAGE_SIZE;if(older.length){egMsgs=[...older,...egMsgs].slice(-100);egChatOldest=egMsgs[0]?.at||0;try{localStorage.setItem(egChatKey(),JSON.stringify(egMsgs))}catch(_){}{const bx=$('egChatList'),h0=bx?bx.scrollHeight:0,t0=bx?bx.scrollTop:0;egRenderChat(false);if(bx)bx.scrollTop=bx.scrollHeight-h0+t0}}}catch(e){console.warn('Load older chat:',e)}finally{egChatLoadingOlder=false}}
+ async function egChatSaveServer(m){const client=window.f2sSupabase;if(!client||!egGroup)return false;try{const {error}=await client.from('f2s_group_chat_messages').insert({id:String(m.id),group_id:String(egGroup.id),who:m.who,name:m.name,text:m.text,at_ms:Number(m.at),reactions:m.reactions||{}});if(error&&String(error.code)!=='23505')throw error;return true}catch(e){console.warn('F2S chat server save:',e);window.__egChatLastErr=String(e&&(e.message||e.details||e.code)||e);return false}}
  function egRenderChat(scrollBottom=true){const box=$('egChatList');if(!box)return;const me=String(window.__f2sAuthUserId||window.__f2sCurrentUser?.id||roomF2SId||roomDisplayName);
   const dayLabel=t=>{const d=new Date(Number(t)||Date.now());return d.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric',year:'numeric'})};
   const timeLabel=t=>{const d=new Date(Number(t)||Date.now());return d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})};
   let lastDay='';
-  box.innerHTML=(egMsgs.length?`<button type=\"button\" class=\"eg-chat-loadolder\" style=\"display:block;width:100%;padding:9px;margin-bottom:8px;border:0;border-radius:12px;background:rgba(255,255,255,.06);color:inherit\" onclick=\"window.__egChatLoadOlder?.()\">Load older messages</button>`:'')+(egMsgs.length?egMsgs.map(m=>{const day=dayLabel(m.at),separator=day!==lastDay?(lastDay=day,`<div class="eg-chatday"><span>${esc(day)}</span></div>`):'',liked=!!(m.reactions&&m.reactions[me]);return `${separator}<div class="eg-yptmsg ${m.who===me?'me':''}" data-chat-msg="${esc(m.id)}"><div class="eg-yptbubble">${m.who!==me?`<div class="eg-yptname">${esc(m.name||'F2Sian')}</div>`:''}<div class="eg-ypttext">${esc(m.text)}</div><button class="eg-chat-react ${liked?'liked':''}" type="button" data-chat-react="${esc(m.id)}" aria-label="React with heart">${liked?'❤️':'♡'}${Object.values(m.reactions||{}).filter(Boolean).length?` <small>${Object.values(m.reactions||{}).filter(Boolean).length}</small>`:''}</button></div><div class="eg-yptmeta">${m.who===me?'':`<span class="eg-ypttick">✓</span>`}<span>${timeLabel(m.at)}</span></div></div>`}).join(''):'<div class=\"eg-chatempty\">No messages yet. Say salaam 👋</div>');if(scrollBottom)box.scrollTop=box.scrollHeight}
+  box.innerHTML=(egMsgs.length?egMsgs.map(m=>{const day=dayLabel(m.at),separator=day!==lastDay?(lastDay=day,`<div class="eg-chatday"><span>${esc(day)}</span></div>`):'',liked=!!(m.reactions&&m.reactions[me]);return `${separator}<div class="eg-yptmsg ${m.who===me?'me':''}" data-chat-msg="${esc(m.id)}"><div class="eg-yptbubble">${m.who!==me?`<div class="eg-yptname">${esc(m.name||'F2Sian')}</div>`:''}<div class="eg-ypttext">${esc(m.text)}</div><button class="eg-chat-react ${liked?'liked':''}" type="button" data-chat-react="${esc(m.id)}" aria-label="React with heart">${liked?'❤️':'♡'}${Object.values(m.reactions||{}).filter(Boolean).length?` <small>${Object.values(m.reactions||{}).filter(Boolean).length}</small>`:''}</button></div><div class="eg-yptmeta">${m.who===me?'':`<span class="eg-ypttick">✓</span>`}<span>${timeLabel(m.at)}</span></div></div>`}).join(''):'<div class=\"eg-chatempty\">No messages yet. Say salaam 👋</div>');if(scrollBottom)box.scrollTop=box.scrollHeight;box.onscroll=()=>{if(box.scrollTop<60)egChatLoadOlder()}}
  window.__egChatLoadOlder=egChatLoadOlder;
  function egRenderTabs(force){
   const snap=(window.__egRoomPeopleSnapshot||[]).slice().sort((a,b)=>b.secs-a.secs);const goal=(Number(egGroup?.goal)||5)*3600;
@@ -31669,7 +31665,7 @@ body.f2s-education-room-open #f2sEducationGroups .eg-wrap{padding:0 10px!importa
    if(!roomChannel){egToast('Chat connection is not ready. Please wait and retry.');return}
    const chatAuth=await dbUser();if(!chatAuth?.id){egToast('Please sign in again to send messages.');return}const pl={id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),who:chatAuth.id,name:roomDisplayName||'F2Sian',text:text.slice(0,1000),at:Date.now(),reactions:{}};
    inp.value='';egMsgs.push(pl);egChatTrim();egRenderChat();
-   const saved=await egChatSaveServer(pl);if(!saved){egMsgs=egMsgs.filter(m=>m.id!==pl.id);egChatTrim();egRenderChat();inp.value=text;egToast('Message could not be saved to server. Check connection and retry');return}
+   const saved=await egChatSaveServer(pl);if(!saved){egMsgs=egMsgs.filter(m=>m.id!==pl.id);egChatTrim();egRenderChat();inp.value=text;egToast('Message not sent: '+(window.__egChatLastErr||'server error'));return}
    try{const result=await roomChannel.send({type:'broadcast',event:'chat',payload:pl});if(result&&result==='error')throw Error('broadcast failed')}catch(err){egToast('Saved on server, but live delivery may be delayed')}};
   ch.addEventListener('click',async e=>{const b=e.target.closest('[data-chat-react]');if(!b)return;const id=b.dataset.chatReact,m=egMsgs.find(x=>String(x.id)===String(id));if(!m)return;const me=String(window.__f2sAuthUserId||window.__f2sCurrentUser?.id||roomF2SId||roomDisplayName);const client=window.f2sSupabase;if(!client){egToast('Reaction server is not connected');return}m.reactions=m.reactions||{};const remove=!!m.reactions[me];if(remove)delete m.reactions[me];else m.reactions[me]='❤️';try{localStorage.setItem(egChatKey(),JSON.stringify(egMsgs))}catch(_){}egRenderChat();b.disabled=true;try{const {data,error}=await client.rpc('f2s_chat_toggle_reaction',{p_message_id:String(id),p_reaction:'❤️'});if(error)throw error;if(data===false){throw new Error('Reaction was not accepted')}if(roomChannel)await roomChannel.send({type:'broadcast',event:'chat-reaction',payload:{id,who:me,reaction:'❤️',remove}})}catch(err){if(remove)m.reactions[me]='❤️';else delete m.reactions[me];try{localStorage.setItem(egChatKey(),JSON.stringify(egMsgs))}catch(_){}egRenderChat();egToast('Reaction failed: '+(err.message||err))}finally{b.disabled=false}});
   isAdmin().then(a=>{egIsAdm=!!a||(g.leader&&roomDisplayName&&String(g.leader)===String(roomDisplayName));if(egIsAdm&&!ch.querySelector('.eg-chatsettings')){const b=document.createElement('button');b.type='button';b.className='eg-chatsettings';b.setAttribute('aria-label','Chat settings');b.textContent='⚙';b.onclick=()=>egChatSettings(g);ch.querySelector('.eg-yptchathead')?.appendChild(b)}}).catch(()=>{});
@@ -31758,7 +31754,7 @@ body.f2s-education-room-open #f2sEducationGroups .eg-wrap{padding:0 10px!importa
   const GRACE_MS=120000;            // keep last known status this long when presence drops (background / flaky network)
   const SERVER_ACTIVE_MAX_RUN_MS=6*3600*1000; // server 'active' stays trusted until a real stop, max 6h
   const SERVER_ACTIVE_MAX_AGE_MS=240000; // trust server "active" flag only if it was updated recently
-  const seen=new Map(), mono=new Map(), lastGood=new Map();
+  const seen=new Map(), mono=new Map(), lastGood=new Map(), offs=new Map();
 
   /* Own total for today: never lower than what the server already holds.
      Fixes the "my screen shows 00:02:58 but everyone else sees 02:28:47" case
@@ -31827,7 +31823,15 @@ body.f2s-education-room-open #f2sEducationGroups .eg-wrap{padding:0 10px!importa
       if(isStudying){
         const stamp=String(p?.today_total_updated_at||p?.timer_updated_at||p?.updated_at||'');
         let rec=seen.get(uid);
-        if(!rec||rec.stamp!==stamp||rec.base!==baseline){rec={stamp,base:baseline,at:Date.now()};seen.set(uid,rec)}
+        if(!rec||rec.stamp!==stamp||rec.base!==baseline){
+          let at=Date.now();const ts=Date.parse(stamp);
+          if(Number.isFinite(ts)){
+            let o=offs.get(uid)||[];
+            if(!rec||rec.stamp!==stamp){o.push(Date.now()-ts);if(o.length>12)o.shift();offs.set(uid,o)}
+            if(o.length)at=Math.min(Date.now(),ts+Math.min.apply(null,o));
+            if(Date.now()-at>20000)at=Date.now();
+          }
+          rec={stamp,base:baseline,at};seen.set(uid,rec)}
         val=baseline+Math.max(0,Math.floor((Date.now()-rec.at)/1000));
       }
     }
@@ -32017,7 +32021,7 @@ body.f2s-education-room-open #f2sEducationGroups .eg-wrap{padding:0 10px!importa
  async function call(action){
   if(busy){queuedAction=action;return null;}busy=true;
   try{
-   const {data,error}=await sb.rpc('f2s_shared_timer_action',{p_action:action,p_date:dayKey(),p_import_seconds:action==='import'?Math.max(0,Math.floor(Number(window.__f2sReconcileTotal?.())||0)):(action==='stop'?Math.max(0,Math.floor(Number(window.__f2sPendingStopSec)||0)):(action==='start'?Math.max(0,Math.min(21600,Math.floor(Number(window.__f2sMainTimerState?.()?.segment)||0))):null))});
+   const {data,error}=await sb.rpc('f2s_shared_timer_action',{p_action:action,p_date:dayKey(),p_import_seconds:action==='set'?Math.max(0,Math.floor(Number(window.__f2sSetSeconds)||0)):action==='import'?Math.max(0,Math.floor(Number(window.__f2sReconcileTotal?.())||0)):(action==='stop'?Math.max(0,Math.floor(Number(window.__f2sPendingStopSec)||0)):(action==='start'?Math.max(0,Math.min(21600,Math.floor(Number(window.__f2sMainTimerState?.()?.segment)||0))):null))});
    if(error)throw error;
    const row=Array.isArray(data)?data[0]:data;
    if(row){serverSeconds=Math.max(0,Number(row.completed_seconds)||0);activeAt=row.active_started_at||null;ready=true;lastAction=Date.now();window.__f2sServerCompleted={sec:serverSeconds,day:dayKey()};try{window.dispatchEvent(new Event('f2s:server-timer-updated'))}catch(_){}if(action==='start'||action==='stop'){if(retryAction===action)retryAction=null}if(action==='stop'){window.__f2sPendingStopSec=0;try{window.__f2sPersistMainTimer?.()}catch(_){}setTimeout(()=>{reconcile().catch(()=>{})},400)}}
@@ -32043,7 +32047,9 @@ body.f2s-education-room-open #f2sEducationGroups .eg-wrap{padding:0 10px!importa
    if(running){const row0=await call('read');if(!(row0&&row0.active_started_at))await call('start');}
    else{const row=await call('read');
     const ms=row&&row.active_started_at?Date.parse(row.active_started_at):0;
-    if(ms&&Date.now()-ms<6*3600*1000&&window.__f2sMainTimerResume&&window.__f2sMainTimerResume(ms)){lastRunning=true;}}
+    const stoppedHere=Number(window.__f2sLastStopAt)||0;
+    if(ms&&stoppedHere>=ms){await call('stop');}/* ended on this device after the server's start: close it, never resume it */
+    else if(ms&&Date.now()-ms<6*3600*1000&&window.__f2sMainTimerResume&&window.__f2sMainTimerResume(ms)){lastRunning=true;}}
   }
   else if(running!==lastRunning){lastRunning=running;await call(running?'start':'stop');}
   else if(!running&&activeAt&&ready&&Date.now()-lastAction>=15000){await call('stop');}/* paused here but server still counting: close it */
@@ -32055,6 +32061,11 @@ body.f2s-education-room-open #f2sEducationGroups .eg-wrap{padding:0 10px!importa
   for(let i=0;i<12&&!impDone;i++){const legacy=Math.max(0,Number(window.__f2sSavedStudyTotal?.())||0);if(legacy>0){const r0=await call('import');if(r0){try{localStorage.setItem(impKey,'1')}catch(_){}}break;}await new Promise(r=>setTimeout(r,1500));}
   await call('read');applyDisplay();await poll();await reconcile();
  }
+ window.__f2sServerSetToday=async function(sec){
+  for(let i=0;i<30&&busy;i++)await new Promise(r=>setTimeout(r,150));
+  window.__f2sSetSeconds=Math.max(0,Math.floor(Number(sec)||0));
+  return await call('set');
+ };
  window.__f2sServerResetToday=async function(){
   for(let i=0;i<30&&busy;i++)await new Promise(r=>setTimeout(r,150));
   const row=await call('reset');
