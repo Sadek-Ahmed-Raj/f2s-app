@@ -14662,8 +14662,19 @@ body.f2s-challenge-open{overflow:hidden}body.f2s-challenge-open #root{visibility
  }
  async function activateJoinedChallenge(id){if(!state.joinedChallengeIds.includes(id)){toast('Join this challenge first.');return}save();state.activeChallengeId=id;state.challenge={...challengeById(id)};state.days=state.challengeRecords[id]||{};try{await refreshChallengeProgress(id)}catch(e){console.warn('[F2S progress refresh]',e)}state.activeTab='dashboard';save();renderDashboard()}
  function toast(msg){const t=$('f2sChToast');t.textContent=msg;t.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.classList.remove('show'),2600)}
+ const GATED_DESTS=new Set(['leaderboard','groups','study']);let authReady=false,pendingDest=null,bootHandled=false;
+ function isRecoveryUrl(){return /type=recovery|reset-password=true/i.test(location.hash+' '+location.search)}
+ function publishAuth(){window.__f2sAuth={ready:true,loggedIn:!!state.loggedIn,uid:(authUser&&authUser.id)||null};try{window.dispatchEvent(new CustomEvent('f2s:auth-ready',{detail:window.__f2sAuth}))}catch(e){}}
+ function openDest(d){const b=nav.querySelector('button[data-dest="'+d+'"]');if(b)b.click();else route(d)}
+ function enforceGate(){const p=currentPage();if(!authReady||state.loggedIn||!['board','groups','study'].includes(p))return false;history.replaceState({f2sType:'page',f2sPage:'profile'},'','#/profile');window.__f2sCurrentPage='profile';toast('Sign in to continue');window.dispatchEvent(new PopStateEvent('popstate',{state:{f2sType:'page',f2sPage:'profile'}}));return true}
+ function f2sAuthDone(){authReady=true;
+  if(state.loggedIn&&pendingDest){const d=pendingDest;pendingDest=null;bootHandled=true;publishAuth();openDest(d);return}
+  pendingDest=null;
+  /* Signed out on app open: always land on Home (password-recovery links excepted). */
+  if(!state.loggedIn&&!bootHandled&&!isRecoveryUrl()&&currentPage()!=='home'){bootHandled=true;history.replaceState({f2sType:'page',f2sPage:'home'},'','#/home');window.__f2sCurrentPage='home';shell.classList.remove('show');document.body.classList.remove('f2s-challenge-open','f2s-board-page');window.dispatchEvent(new PopStateEvent('popstate',{state:{f2sType:'page',f2sPage:'home'}}));updateNav();publishAuth();return}
+  bootHandled=true;enforceGate();publishAuth()}
  function currentPage(){return (location.hash.replace(/^#\/?/,'').split(/[?&]/)[0]||'home').split('/')[0]}
- function route(dest){more.classList.remove('open');if(dest!=='leaderboard')document.body.classList.remove('f2s-board-page');if(dest==='challenge'||dest==='profile'){const next='#/'+dest;history.pushState({f2sType:'page',f2sPage:dest,f2sFrom:currentPage()},'',next);window.__f2sCurrentPage=dest;showRoute(dest);return}
+ function route(dest){more.classList.remove('open');if(GATED_DESTS.has(dest)&&!state.loggedIn){pendingDest=dest;if(authReady)toast('Sign in to continue');dest='profile'}if(dest!=='leaderboard')document.body.classList.remove('f2s-board-page');if(dest==='challenge'||dest==='profile'){const next='#/'+dest;history.pushState({f2sType:'page',f2sPage:dest,f2sFrom:currentPage()},'',next);window.__f2sCurrentPage=dest;showRoute(dest);return}
   if(dest==='leaderboard'){shell.classList.remove('show');document.body.classList.remove('f2s-challenge-open');document.body.classList.add('f2s-board-page');history.pushState({f2sType:'page',f2sPage:'home',f2sBoard:true,f2sFrom:currentPage()},'','#/home');window.__f2sCurrentPage='home';window.dispatchEvent(new PopStateEvent('popstate',{state:{f2sType:'page',f2sPage:'home',f2sBoard:true}}));requestAnimationFrame(()=>{const el=document.querySelector('#boards')||document.querySelector('#t5')||document.querySelector('[id*="leaderboard"]');if(el){el.scrollIntoView({behavior:'smooth',block:'start'});document.body.classList.add('f2s-board-page')}else toast('Leaderboard is available on the existing Home page.');});return}
   shell.classList.remove('show');document.body.classList.remove('f2s-challenge-open');history.pushState({f2sType:'page',f2sPage:dest==='home'?'home':dest,f2sFrom:currentPage()},'', '#/'+(dest==='home'?'home':dest));window.__f2sCurrentPage=dest==='home'?'home':dest;window.dispatchEvent(new PopStateEvent('popstate',{state:{f2sType:'page',f2sPage:dest==='home'?'home':dest}}));
  }
@@ -14673,18 +14684,25 @@ body.f2s-challenge-open{overflow:hidden}body.f2s-challenge-open #root{visibility
   if(!state.loggedIn){renderLogin();return;}
   if(dest==='profile'){renderProfile();return;}
   const routeToken=location.hash;
+  /* Repeat visit within 10 min: render immediately from the already-synced state, refresh in the background and re-render only if something changed. */
+  if(challengeSyncedAt&&Date.now()-challengeSyncedAt<600000){
+   const sig=()=>{try{return JSON.stringify([state.challenges,state.joinedChallengeIds,state.activeChallengeId,state.challengeRecords])}catch(e){return Math.random()}};
+   renderDashboard();const before=sig();
+   loadChallengeStateFromSupabase().then(()=>{challengeSyncedAt=Date.now();if(sig()!==before&&location.hash===routeToken&&currentPage()==='challenge'&&shell.classList.contains('show'))renderDashboard()}).catch(err=>console.warn('[F2S challenge background sync]',err));
+   return;
+  }
   // Avoid briefly showing the Challenges list to members whose active cycle is
   // only confirmed by the server. Keep a lightweight loading view until the
   // authoritative cycle state is ready, then render the correct default tab once.
   shell.innerHTML=`<div class="f2s-ch-wrap f2s-route-loading" role="status" aria-live="polite"><div class="f2s-route-loading-mark"><img src="${IMG_F2S_LOGO}" alt="F2S Logo"></div><strong>Preparing your Challenge space</strong><span>Checking your active cycle…</span><div class="f2s-route-loading-track"><i></i></div></div>`;
-  loadChallengeStateFromSupabase().catch(err=>{
+  loadChallengeStateFromSupabase().then(()=>{challengeSyncedAt=Date.now()}).catch(err=>{
    console.warn('[F2S challenge initial sync]',err);
   }).finally(()=>{
    if(location.hash!==routeToken||currentPage()!=='challenge'||!shell.classList.contains('show'))return;
    renderDashboard();
   });
  }
- let authMode='signin',authUser=null,memberProfile=null;
+ let authMode='signin',authUser=null,memberProfile=null,challengeSyncedAt=0;
  if(/type=recovery|reset-password=true/i.test(location.hash+' '+location.search)){setTimeout(()=>renderPasswordRecovery(),0)}
  
  async function renderAdminConsole(){
@@ -14864,7 +14882,7 @@ async function renderPasswordRecovery(){shell.innerHTML=`<div class="f2s-ch-wrap
         const saved=await sb.rpc('f2s_save_member_profile',{p_f2s_name:storedName,p_f2s_id:null,p_group_name:'F2sians',p_ypt_username:''});if(saved.error)throw saved.error;await fetchMemberProfile();
       }
       if(!memberProfile)throw Error('Signed in, but the F2S profile could not be loaded. Your account is not deleted; please retry.');
-      state.loggedIn=true;save();toast('Welcome back, '+(memberProfile.display_name||'F2sian'));const destination=currentPage()==='profile'?'profile':'challenge';showRoute(destination);
+      challengeSyncedAt=0;state.loggedIn=true;save();toast('Welcome back, '+(memberProfile.display_name||'F2sian'));const pd=pendingDest;pendingDest=null;if(pd&&GATED_DESTS.has(pd)){setTimeout(()=>openDest(pd),0);return}const destination=currentPage()==='profile'?'profile':'challenge';showRoute(destination);
     }
    }catch(err){const msg=String(err?.message||err);status.textContent=/email not confirmed/i.test(msg)?'Please verify your Gmail address using the confirmation link before logging in.':msg;}
    finally{btn.disabled=false}
@@ -16083,6 +16101,7 @@ async function refreshGlobalCalendarView(){
   <div class="f2s-profile-v2-grid"><aside class="f2s-ch-card f2s-profile-side-card"><div class="f2s-ch-kicker">VERIFIED MEMBER IDENTITY</div><h2>F2S-ID Directory Match</h2><dl class="f2s-profile-details"><div><dt>User Name</dt><dd>${esc(p.name||'Not set')}</dd></div><div><dt>F2S ID</dt><dd>${esc(p.id||'Not added')}</dd></div><div><dt>F2S Name / Full Name</dt><dd>${esc(p.fullName||'Not set')}</dd></div><div><dt>Community group</dt><dd>${esc(p.group||'F2sians')}</dd></div></dl><div id="f2sIdMatchDetails" class="f2s-id-match-details">Checking available public leaderboard records…</div></aside></div>
   <section class="f2s-ch-card" id="f2sAccountEmailCard" style="margin-top:13px"><div class="f2s-ch-kicker">ACCOUNT SECURITY</div><h2 style="margin:6px 0">Email address</h2><p style="color:#91a096;font-size:11px;line-height:1.6;margin:0 0 12px">Your sign-in email is managed securely by the F2S server. A confirmation link will be sent before the new email becomes active.</p><div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap"><strong id="f2sCurrentAccountEmail" style="font-size:12px;color:#dce8df;overflow-wrap:anywhere;flex:1">${esc(authUser?.email||'Not available')}</strong><span id="f2sEmailChangeState" style="font-size:9px;color:#8da896">Current email</span></div><form id="f2sChangeEmailForm" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:13px"><input class="f2s-ch-input" type="email" id="f2sNewAccountEmail" autocomplete="email" required maxlength="254" placeholder="Enter your new Gmail / email address" style="min-width:0"><button class="f2s-ch-btn primary" type="submit" id="f2sChangeEmailSubmit">Change email</button></form><p style="margin:10px 0 0;color:#F1D49A;font-size:11px;line-height:1.5;font-weight:650">✉ Check your Inbox and Spam folder.</p><p id="f2sChangeEmailStatus" role="status" style="font-size:10px;color:#91a096;line-height:1.55;margin:9px 0 0"></p></section>
   <section class="f2s-ch-card" id="f2sAccountPasswordCard" style="margin-top:13px"><div class="f2s-ch-kicker">ACCOUNT SECURITY</div><h2 style="margin:6px 0">Change password</h2><p style="color:#91a096;font-size:11px;line-height:1.6;margin:0 0 12px">Request a secure password reset link using your current sign-in email.</p><button class="f2s-ch-btn primary" type="button" id="f2sSendPasswordReset">Send password reset email</button><p id="f2sPasswordResetNotice" role="note" style="margin:12px 0 0;color:#F1D49A;font-size:11px;line-height:1.6;font-weight:650">✉ Check your Inbox and Spam folder.</p><p id="f2sChangePasswordStatus" role="status" style="font-size:10px;color:#91a096;line-height:1.55;margin:9px 0 0"></p></section>
+  <section class="f2s-ch-card" id="f2sAccountBackupCard" style="margin-top:13px"><div class="f2s-ch-kicker">ACCOUNT SECURITY</div><h2 style="margin:6px 0">Backup study data</h2><p style="color:#91a096;font-size:11px;line-height:1.6;margin:0 0 12px">Save your timer records, tasks and planner as a file, or restore them on another device. Restore merges with your current data, nothing is deleted.</p><div style="display:flex;gap:9px"><button class="f2s-ch-btn primary" type="button" id="f2sBackupExportBtn" style="flex:1">⬇ Backup data</button><button class="f2s-ch-btn" type="button" id="f2sBackupRestoreBtn" style="flex:1">⬆ Restore data</button></div><input type="file" id="f2sBackupFileInput" accept="application/json,.json" hidden><p id="f2sBackupStatus" role="status" style="font-size:10px;color:#91a096;line-height:1.55;margin:9px 0 0"></p></section>
   <section class="f2s-ch-card f2s-profile-achievements"><div class="f2s-profile-section-head"><div><div class="f2s-ch-kicker">RECOGNITION</div><h2>Medals &amp; achievements</h2><p>F2S Star recognition is based on the separate F2S Star leaderboard. Challenge medals are tracked independently.</p></div></div><div class="f2s-profile-achievement-grid f2s-recognition-grid"><article id="f2sBadgeVerifiedT5" class=""><span>✓</span><strong>Verified</strong><small>F2S Name and F2S ID verified</small><b>LOCKED</b></article><article id="f2sBadgeStar" class=""><span>★</span><strong>F2S Star · Top 3</strong><small>Reserved for the top three F2S Star leaderboard members</small><b>TOP 3 ONLY</b></article><article id="f2sBadgeFCB" class=""><span>♟</span><strong>FCB Star · Top 3</strong><small>Reserved for the top three FCB Star leaderboard members</small><b>TOP 3 ONLY</b></article></div></section>
   <section class="f2s-ch-card f2s-profile-edit-panel ${forceEdit?'open':''}" id="chProfileEditPanel"><div class="f2s-profile-section-head"><div><div class="f2s-ch-kicker">PROFILE SETTINGS</div><h2>${isVerified?'Edit your profile':'Create your F2S profile'}</h2><p>${isVerified?'You can update User Name, F2S Name / Full Name and Group Name. Your verified F2S ID stays the same.':'Create your profile with User Name and F2S Name / Full Name. If your name and existing F2S ID match the Directory, verify directly; otherwise complete the F2S-ID Challenge.'}</p></div></div>${form}</section><p class="f2s-profile-privacy"></p></div>`;
   const goChallenge=()=>{history.pushState({f2sType:'page',f2sPage:'challenge'},'','#/challenge');window.__f2sCurrentPage='challenge';renderDashboard()};
@@ -16107,6 +16126,9 @@ async function refreshGlobalCalendarView(){
     }catch(err){if(out)out.textContent='Could not send password reset email: '+(err.message||err)}
     finally{passwordResetBtn.disabled=false;passwordResetBtn.textContent='Send password reset email'}
   });
+  $('f2sBackupExportBtn')?.addEventListener('click',()=>{const out=$('f2sBackupStatus');try{if(!window.f2sStudyBackupExport)throw Error('Study data is not loaded yet. Reload and try again.');window.f2sStudyBackupExport();if(out)out.textContent='Backup file downloaded.'}catch(e){if(out)out.textContent='Backup failed: '+(e.message||e)}});
+  const backupFile=$('f2sBackupFileInput');$('f2sBackupRestoreBtn')?.addEventListener('click',()=>backupFile&&backupFile.click());
+  backupFile?.addEventListener('change',async()=>{const out=$('f2sBackupStatus'),f=backupFile.files&&backupFile.files[0];backupFile.value='';if(!f)return;try{if(!window.f2sStudyBackupRestore)throw Error('Study data is not loaded yet. Reload and try again.');await window.f2sStudyBackupRestore(f);if(out)out.textContent='Restore complete ✓'}catch(e){if(out)out.textContent='Restore failed: '+(e.message||e)}});
   $('chProfileCancel').onclick=()=>{if(!p.name||!p.fullName){toast('Add your User Name and F2S Name / Full Name first.');return}panelClose()};
   function panelClose(){$('chProfileEditPanel')?.classList.remove('open')}
   $('chProfileForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.currentTarget),userName=String(f.get('name')||'').trim().replace(/\s+/g,' '),fullName=String(f.get('full_name')||'').trim().replace(/\s+/g,' '),f2sId=String(f.get('f2s_id')||p.id||'').trim().toUpperCase(),group=String(f.get('group_name')||state.profile.group||'F2sians').trim();if(userName.length<2){toast('Enter a valid User Name.');return}if(fullName.length<2){toast('Enter your F2S Name / Official Full Name.');return}if(!window.f2sSupabase){toast('Supabase is unavailable. Profile was not saved.');return}try{const q=await window.f2sSupabase.rpc('f2s_save_member_profile_v2',{p_user_name:userName,p_full_name:fullName,p_f2s_id:null,p_group_name:group});if(q.error)throw q.error;const result=Array.isArray(q.data)?q.data[0]:q.data;if(!result||result.success!==true)throw Error(result?.message||'The server did not confirm the profile update.');state.profile={...state.profile,name:result.user_name||userName,fullName:result.full_name||fullName,ypt:'',id:result.f2s_id||memberProfile?.f2s_id||'',group:result.group_name||group};memberProfile={...(memberProfile||{}),display_name:state.profile.name,full_name:state.profile.fullName,group_name:state.profile.group,f2s_id:state.profile.id,verified:!!result.verified,user_id:authUser?.id||memberProfile?.user_id};if(!state.profile.id&&f2sId){const vr=await window.f2sSupabase.rpc('f2s_verify_directory_identity',{p_full_name:fullName,p_f2s_id:f2sId});if(vr.error)throw vr.error;const v=Array.isArray(vr.data)?vr.data[0]:vr.data;if(v?.success===true||v?.verified===true){state.profile.id=v.f2s_id||f2sId;await fetchMemberProfile();memberProfile={...memberProfile,f2s_id:state.profile.id,verified:true};toast('Directory match confirmed. Your F2S identity is verified.')}else{toast(v?.message||'No exact Directory match. Complete the F2S-ID Challenge for Admin assignment.')}}save();window.dispatchEvent(new CustomEvent('f2s:identity-updated'));renderProfile(false);if(!f2sId||memberProfile?.verified)toast(memberProfile?.verified?'Profile saved · F2S identity verified.':'Profile saved. You can verify later or complete the F2S-ID Challenge.')}catch(err){toast('Profile update failed: '+(err.message||err));console.warn('[F2S] Profile update failed:',err)}};
@@ -16284,13 +16306,32 @@ May Allah make this journey beneficial for both of us. Please remember me in you
  if(window.f2sSupabase?.auth?.onAuthStateChange){window.f2sSupabase.auth.onAuthStateChange((event)=>{if(event==='PASSWORD_RECOVERY')setTimeout(()=>renderPasswordRecovery(),0)})}if(location.hash.includes('type=recovery'))setTimeout(()=>renderPasswordRecovery(),400);
  document.addEventListener('click',e=>{const b=e.target.closest('#chAdminOpen,[data-tab="admin"]');if(!b)return;e.preventDefault();e.stopPropagation();if(!state.loggedIn){renderLogin();toast('Sign in to access challenge settings');return}state.activeTab='admin';save();selectTab('admin');requestAnimationFrame(()=>{const panel=$('chAdminForm')||shell.querySelector('.f2s-ch-card');panel?.scrollIntoView({behavior:'smooth',block:'start'});});},true);
  nav.querySelectorAll('button[data-dest]').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.dest==='more'){more.classList.toggle('open');return}route(b.dataset.dest)}));
+ /* Faster tab switching: page-level smooth scrolling is suspended for a moment on every nav tap so the new tab appears instantly. */
+ window.addEventListener('click',function(e){
+  if(!(e.target&&e.target.closest&&e.target.closest('#f2sGlobalNav button[data-dest]')))return;
+  const h=document.documentElement;h.style.setProperty('scroll-behavior','auto','important');
+  clearTimeout(window.__f2sSbT);window.__f2sSbT=setTimeout(()=>h.style.removeProperty('scroll-behavior'),700);
+ },true);
+ /* Sign-in gate: while signed out, every main-nav tab except Home, Feed and More (Board, Groups, Study, Challenge, Profile) requires sign-in.
+    Window-capture so it runs before every page-specific nav handler. After sign-in the tapped tab opens. */
+ window.addEventListener('click',function(e){
+  const b=e.target&&e.target.closest?e.target.closest('#f2sGlobalNav button[data-dest]'):null;
+  if(!b||state.loggedIn)return;
+  const dest=b.dataset.dest;
+  if(dest==='home'||dest==='more'||dest==='feed')return;
+  e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();
+  more.classList.remove('open');
+  route(dest);
+  /* Feed is open without sign-in: its own nav handler is bypassed above, so close it explicitly (otherwise it covers the login screen). */
+  if(document.body.classList.contains('f2s-feed-exclusive')){try{window.dispatchEvent(new PopStateEvent('popstate',{state:{f2sType:'page',f2sPage:currentPage()}}))}catch(_){}}
+ },true);
  document.querySelectorAll('[data-board-route]').forEach(b=>b.addEventListener('click',()=>route(b.dataset.boardRoute)));
  more.querySelectorAll('[data-more-action]').forEach(b=>b.addEventListener('click',async e=>{const a=b.dataset.moreAction;more.classList.remove('open');if(a==='install')return;if(a==='feed-admin'){e.preventDefault();if(!(window.__f2sIsAdmin===true||window.f2sIsAdmin===true||document.body.classList.contains('f2s-admin')||document.body.dataset.f2sAdmin==='true')){const sb=window.f2sSupabase;if(!sb){f2sAlert('Sign in with an F2S admin account to access Admin Control.');return}const q=await sb.rpc('f2s_is_app_admin');if(q.error||q.data!==true){f2sAlert('Admin access denied.');return}}window.dispatchEvent(new CustomEvent('f2s:open-feed-admin-control'));return}else if(a==='rules'){e.preventDefault();route('home');setTimeout(()=>{const el=document.querySelector('#tasks')||document.querySelector('#t5');el?.scrollIntoView({behavior:'smooth',block:'start'})},300)}else{e.preventDefault();route(a)}}));
- document.addEventListener('click',e=>{if(!more.contains(e.target)&&!nav.contains(e.target))more.classList.remove('open')});window.addEventListener('popstate',e=>{const p=(e.state&&e.state.f2sPage)||currentPage();if(p==='challenge'||p==='profile'){document.body.classList.remove('f2s-board-page');showRoute(p)}else{shell.classList.remove('show');document.body.classList.remove('f2s-challenge-open');if(!(e.state&&e.state.f2sBoard))document.body.classList.remove('f2s-board-page')}updateNav()});window.addEventListener('hashchange',()=>{const p=currentPage();if(p==='challenge'||p==='profile'){document.body.classList.remove('f2s-board-page');showRoute(p)}else{shell.classList.remove('show');document.body.classList.remove('f2s-challenge-open')}updateNav()});
+ document.addEventListener('click',e=>{if(!more.contains(e.target)&&!nav.contains(e.target))more.classList.remove('open')});window.addEventListener('popstate',e=>{if(enforceGate())return;const p=(e.state&&e.state.f2sPage)||currentPage();if(p==='challenge'||p==='profile'){document.body.classList.remove('f2s-board-page');showRoute(p)}else{shell.classList.remove('show');document.body.classList.remove('f2s-challenge-open');if(!(e.state&&e.state.f2sBoard))document.body.classList.remove('f2s-board-page')}updateNav()});window.addEventListener('hashchange',()=>{if(enforceGate())return;const p=currentPage();if(p==='challenge'||p==='profile'){document.body.classList.remove('f2s-board-page');showRoute(p)}else{shell.classList.remove('show');document.body.classList.remove('f2s-challenge-open')}updateNav()});
  // Keep the navigation visible on every website page, but never show the old floating APK CTA.
  const originalApk=$('f2sApkInstallBtn');if(originalApk){originalApk.style.display='none';originalApk.setAttribute('aria-hidden','true')}
  function renderPasswordRecovery(){shell.classList.add('show');document.body.classList.add('f2s-challenge-open');shell.innerHTML=`<div class="f2s-ch-wrap"><div class="f2s-ch-top"><div class="f2s-ch-brand"><div class="f2s-ch-mark f2s-shared-brand-mark"><img src="${IMG_F2S_LOGO}" alt="F2S Logo"></div><div><b>FAJR TO SUCCESS</b><small>ACCOUNT SECURITY</small></div></div></div><section class="f2s-ch-login"><div class="f2s-ch-kicker">PASSWORD RECOVERY</div><h1>Set a new password</h1><p>Choose a new password for your F2S account.</p><form id="chRecoveryForm" class="f2s-ch-login-form"><label class="f2s-ch-field">New password<input name="password" type="password" minlength="8" autocomplete="new-password" required placeholder="At least 8 characters"></label><label class="f2s-ch-field">Confirm new password<input name="confirm" type="password" minlength="8" autocomplete="new-password" required placeholder="Enter it again"></label><button class="f2s-ch-btn primary" type="submit">Update password</button></form><p id="chRecoveryStatus" class="f2s-ch-note" role="status"></p></section></div>`;$('chRecoveryForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.currentTarget),password=String(f.get('password')||''),confirmPassword=String(f.get('confirm')||''),status=$('chRecoveryStatus'),btn=e.currentTarget.querySelector('button[type=submit]');if(password!==confirmPassword){status.textContent='Passwords do not match.';return}btn.disabled=true;try{const q=await window.f2sSupabase.auth.updateUser({password});if(q.error)throw q.error;status.textContent='Password updated successfully. Opening your F2S account…';await fetchMemberProfile();setTimeout(()=>{state.loggedIn=!!memberProfile;showRoute('challenge')},700)}catch(err){status.textContent='Could not update password: '+(err.message||err)}finally{btn.disabled=false}}}
- if(window.f2sSupabase){window.f2sSupabase.auth.onAuthStateChange((event)=>{if(event==='PASSWORD_RECOVERY')setTimeout(renderPasswordRecovery,0)});if(new URLSearchParams(location.hash.replace(/^#/,'' )).get('type')==='recovery')setTimeout(renderPasswordRecovery,0);window.f2sSupabase.auth.getSession().then(async r=>{if(r.data?.session){try{await fetchMemberProfile()}catch(e){console.warn('[F2S] Profile load:',e.message)}if(currentPage()==='challenge'||currentPage()==='profile')showRoute(currentPage())}else{state.loggedIn=false;state.profile={...defaultState.profile};memberProfile=null;authUser=null;save();if(currentPage()==='challenge'||currentPage()==='profile')showRoute(currentPage())}updateNav()}).catch(()=>{state.loggedIn=false;if(currentPage()==='challenge'||currentPage()==='profile')showRoute(currentPage());updateNav()})}else{state.loggedIn=false;if(currentPage()==='challenge'||currentPage()==='profile')showRoute(currentPage())}updateNav();
+ if(window.f2sSupabase){window.f2sSupabase.auth.onAuthStateChange((event)=>{if(event==='PASSWORD_RECOVERY')setTimeout(renderPasswordRecovery,0)});if(new URLSearchParams(location.hash.replace(/^#/,'' )).get('type')==='recovery')setTimeout(renderPasswordRecovery,0);window.f2sSupabase.auth.getSession().then(async r=>{if(r.data?.session){try{await fetchMemberProfile()}catch(e){console.warn('[F2S] Profile load:',e.message)}if(currentPage()==='challenge'||currentPage()==='profile')showRoute(currentPage())}else{state.loggedIn=false;state.profile={...defaultState.profile};memberProfile=null;authUser=null;save();if(currentPage()==='challenge'||currentPage()==='profile')showRoute(currentPage())}updateNav();f2sAuthDone()}).catch(()=>{state.loggedIn=false;if(currentPage()==='challenge'||currentPage()==='profile')showRoute(currentPage());updateNav();f2sAuthDone()})}else{state.loggedIn=false;if(currentPage()==='challenge'||currentPage()==='profile')showRoute(currentPage());f2sAuthDone()}updateNav();
  // Expire a cycle at the date boundary even if the Challenge page stays open.
  const checkChallengeExpiry=()=>{if(expireChallengeCycleIfNeeded()&&state.loggedIn&&currentPage()==='challenge')renderDashboard()};
  window.addEventListener('focus',checkChallengeExpiry);
@@ -16645,8 +16686,11 @@ May Allah make this journey beneficial for both of us. Please remember me in you
       clearTimeout(timer); timer=setTimeout(flush,8000);
     } finally { syncing = false; }
   }
+  let lastMainSig = null;
+  function mainSig(raw){ try{ const o=JSON.parse(raw); delete o.seen; return JSON.stringify(o); }catch(e){ return raw; } }
   function schedule(key){
     if(!isCloudKey(key)) return;
+    if(key==='f2s_main_timer_v2'){ const sig=mainSig(localStorage.getItem(key)); if(sig===lastMainSig) return; lastMainSig=sig; }
     if(!userId){ say('local','Saved on this device','Sign in to keep your progress available across devices.'); return; }
     dirty.add(key); clearTimeout(timer); timer=setTimeout(flush,1500);
   }
@@ -20588,17 +20632,35 @@ body.f2s-feed-exclusive #f2sMoreMenu{z-index:2147482000!important}
     }
 
     const isSecure = location.protocol === "https:" || location.hostname === "localhost";
-    const hasManifest = !!document.querySelector('link[rel="manifest"]');
-    let swActive = false;
+    const link = document.querySelector('link[rel="manifest"]');
+    let manifestInfo = "Manifest MISSING";
+    if (link) {
+      try {
+        const r = await fetch(link.href, { cache: "no-store" });
+        if (!r.ok) manifestInfo = "Manifest HTTP " + r.status + " (file not found)";
+        else {
+          const m = await r.json();
+          const sizes = (m.icons || []).map(function (i) { return i.sizes; }).join(",");
+          manifestInfo = "Manifest OK · icons " + (sizes || "none") + " · display " + (m.display || "none");
+        }
+      } catch (e) { manifestInfo = "Manifest unreadable"; }
+    }
+    let swInfo = "Service Worker NOT ACTIVE";
     try {
       const reg = "serviceWorker" in navigator ? await navigator.serviceWorker.getRegistration(new URL("./", document.baseURI).pathname) : null;
-      swActive = !!(reg && (reg.active || reg.waiting || reg.installing));
+      if (reg && (reg.active || reg.waiting || reg.installing)) swInfo = "Service Worker ACTIVE";
+      else {
+        const sw = await fetch(new URL("./sw.js", document.baseURI).href, { cache: "no-store" });
+        if (!sw.ok) swInfo = "sw.js HTTP " + sw.status + " (file not found)";
+      }
     } catch (e) {}
-
+    const inApp = /FBAN|FBAV|Instagram|Line\/|; wv\)/i.test(ua);
     return {
       outcome: "unavailable",
-      message: "The native install prompt is not available yet. Open F2S directly in Chrome, reload the website, then use Chrome menu → Install app / Add to Home screen.",
-      checks: "HTTPS " + (isSecure ? "OK" : "NOT OK") + " · Manifest " + (hasManifest ? "OK" : "MISSING") + " · Service Worker " + (swActive ? "ACTIVE" : "NOT ACTIVE")
+      message: inApp
+        ? "This in-app browser can't install apps. Open the website in Chrome, then use menu (⋮) → Install app."
+        : "Your browser hasn't offered the install prompt yet. In Chrome tap menu (⋮) → Install app (or Add to Home screen). If that option is missing, send the checks below to the admin.",
+      checks: "HTTPS " + (isSecure ? "OK" : "NOT OK") + " · " + manifestInfo + " · " + swInfo
     };
   }
 
@@ -26475,7 +26537,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
   if(typeof originalFetch==='function'){
     window.fetch=function(...args){
       let url='';try{url=String(args[0]&&args[0].url||args[0]||'');}catch(_){}
-      const track=/supabase\.(co|in|com)|\/rest\/v1\/|\/auth\/v1\/|\/functions\/v1\//i.test(url);
+      const track=/supabase\.(co|in|com)|\/rest\/v1\/|\/auth\/v1\/|\/functions\/v1\//i.test(url)&&!/f2s_user_state/i.test(url);
       /* Show the full-screen loader only for user-triggered requests (or the first load).
          Background polling (live timer, presence, heartbeat, group sync) must never cover the screen. */
       const userDriven=(Date.now()-lastUserAction<4000)||(Date.now()-bootAt<6000);
@@ -29197,7 +29259,6 @@ body.f2s-study-system-open #f2sStudySystemPage{display:block}
       <div class="f2ss-report-donut-card"><div class="f2ss-report-donut-title">Daily goal progress</div><div class="f2ss-donut-layout"><div class="f2ss-donut f2ss-goal-donut" id="f2ssGoalDonut"><div><strong id="f2ssGoalCenter">0%</strong><small>GOAL</small></div></div><div class="f2ss-donut-legend" id="f2ssGoalLegend"></div></div></div>
      </div>
     </div>
-    <div class="f2ss-backup-row" style="display:flex;gap:8px;margin:0 0 12px"><button type="button" class="f2ss-btn" id="f2ssBackupExport" style="flex:1;height:44px">⬇ Backup data</button><button type="button" class="f2ss-btn" id="f2ssBackupImport" style="flex:1;height:44px">⬆ Restore data</button><input type="file" id="f2ssBackupFile" accept="application/json,.json" hidden></div>
     <div class="f2ss-focus-map-card" id="f2ssFocusMapCard">
      <div class="f2ss-focus-map-visual">
       <svg viewBox="0 0 180 190" role="img" aria-label="Focused study illustration">
@@ -29393,22 +29454,22 @@ body.f2s-study-system-open #f2sStudySystemPage{display:block}
  }catch(e){console.warn('[F2S] cloud merge failed',e)}};
  window.addEventListener('f2s:cloud-ready',()=>setTimeout(mergeCloudState,0));
  if(window.__f2sCloudReadyFired)setTimeout(mergeCloudState,0);
- /* Manual backup / restore: moves study data between different origins (file:// vs github.io vs PWA). Restore MERGES, never wipes. */
+ /* Manual backup / restore: moves study data between different origins (file:// vs github.io vs PWA). Restore MERGES, never wipes.
+    Buttons live in Profile > Account security; they call these functions. */
  (function(){
-  const ex=$('f2ssBackupExport'),im=$('f2ssBackupImport'),fi=$('f2ssBackupFile');if(!ex||!im||!fi)return;
   const J=k=>{try{return JSON.parse(localStorage.getItem(k)||'null')}catch(e){return null}};
-  ex.addEventListener('click',()=>{save();const out={f2sBackup:1,at:new Date().toISOString(),study:data,checkins:J(CHECKIN_KEY),goals:J(GOAL_KEY),pomodoro:J('f2s_study_pomodoro_settings')};
-   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(out)],{type:'application/json'}));a.download='f2s-study-backup-'+today()+'.json';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500)});
-  im.addEventListener('click',()=>fi.click());
-  fi.addEventListener('change',async()=>{const f=fi.files&&fi.files[0];fi.value='';if(!f)return;
-   try{const b=JSON.parse(await f.text());const s=b.study||b;if(!s||typeof s!=='object'||!Array.isArray(s.sessions||s.tasks||[]))throw 0;
-    const kf=x=>(x&&x.at)?'at:'+x.at:JSON.stringify(x);const dead=new Set([...(data.deletedSessions||[]),...(s.deletedSessions||[])].map(String));
-    const un=(a,c)=>{const m=new Map();[...(a||[]),...(c||[])].forEach(x=>{const k=kf(x);if(!m.has(k))m.set(k,x)});return [...m.values()]};
-    data.deletedSessions=[...dead];data.sessions=un(data.sessions,s.sessions).filter(x=>!(x&&x.at&&dead.has(String(x.at))));data.breaks=un(data.breaks,s.breaks);
-    const dT=new Set([...(data.deletedTasks||[]),...(s.deletedTasks||[])]);const have=new Set(data.tasks.map(tkey));
-    (s.tasks||[]).forEach(t=>{if(t&&!have.has(tkey(t))&&!dT.has(tkey(t))){data.tasks.push(t);have.add(tkey(t))}});data.tasks=data.tasks.filter(t=>!dT.has(tkey(t)));data.deletedTasks=[...dT];
-    if(b.checkins&&typeof b.checkins==='object'){Object.keys(b.checkins).forEach(d=>{checkinStore[d]={...(b.checkins[d]||{}),...(checkinStore[d]||{})}});saveCheckin()}
-    save();try{render()}catch(e){}alert('Restore complete ✓')}catch(e){alert('Invalid backup file')}});
+  window.f2sStudyBackupExport=function(){save();const out={f2sBackup:1,at:new Date().toISOString(),study:data,checkins:J(CHECKIN_KEY),goals:J(GOAL_KEY),pomodoro:J('f2s_study_pomodoro_settings')};
+   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(out)],{type:'application/json'}));a.download='f2s-study-backup-'+today()+'.json';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500)};
+  window.f2sStudyBackupRestore=async function(f){
+   let b,s;try{b=JSON.parse(await f.text());s=b.study||b;if(!s||typeof s!=='object'||!Array.isArray(s.sessions||s.tasks||[]))throw 0}catch(e){throw Error('Invalid backup file')}
+   const kf=x=>(x&&x.at)?'at:'+x.at:JSON.stringify(x);const dead=new Set([...(data.deletedSessions||[]),...(s.deletedSessions||[])].map(String));
+   const un=(a,c)=>{const m=new Map();[...(a||[]),...(c||[])].forEach(x=>{const k=kf(x);if(!m.has(k))m.set(k,x)});return [...m.values()]};
+   data.deletedSessions=[...dead];data.sessions=un(data.sessions,s.sessions).filter(x=>!(x&&x.at&&dead.has(String(x.at))));data.breaks=un(data.breaks,s.breaks);
+   const dT=new Set([...(data.deletedTasks||[]),...(s.deletedTasks||[])]);const have=new Set(data.tasks.map(tkey));
+   (s.tasks||[]).forEach(t=>{if(t&&!have.has(tkey(t))&&!dT.has(tkey(t))){data.tasks.push(t);have.add(tkey(t))}});data.tasks=data.tasks.filter(t=>!dT.has(tkey(t)));data.deletedTasks=[...dT];
+   if(b.checkins&&typeof b.checkins==='object'){Object.keys(b.checkins).forEach(d=>{checkinStore[d]={...(b.checkins[d]||{}),...(checkinStore[d]||{})}});saveCheckin()}
+   save();try{render()}catch(e){}
+  };
  })();
 
 
@@ -30071,21 +30132,28 @@ $('f2ssTaskTimers').addEventListener('click',e=>{const menu=e.target.closest('[d
  window.addEventListener('popstate',()=>{if(location.hash==='#/study')open();else close()});
  if(location.hash==='#/study'){open()}
  else if(!location.hash||location.hash==='#/'){
-   let firstOpenToday=true;
-   try{
-    const dayKey=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dhaka',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-    firstOpenToday=localStorage.getItem('f2s_home_first_open_day_v1')!==dayKey;
-    if(firstOpenToday)localStorage.setItem('f2s_home_first_open_day_v1',dayKey);
-   }catch(e){firstOpenToday=true}
-   if(firstOpenToday){
-    history.replaceState({f2sType:'page',f2sPage:'home'},'','#/home');
-    window.__f2sCurrentPage='home';
-    render();
-   }else{
-    history.replaceState({f2sType:'page',f2sPage:'study'},'','#/study');
-    window.__f2sCurrentPage='study';
-    open();
-   }
+   /* Entry rules: signed out -> always Home. Signed in -> Home on the first open of the day (Asia/Dhaka day, per account), Study on every later open. */
+   const KEY='f2s_home_first_open_day_v2';
+   const dayKey=(()=>{try{return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dhaka',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())}catch(e){return new Date().toISOString().slice(0,10)}})();
+   const goHome=()=>{history.replaceState({f2sType:'page',f2sPage:'home'},'','#/home');window.__f2sCurrentPage='home';close()};
+   const goStudy=()=>{history.replaceState({f2sType:'page',f2sPage:'study'},'','#/study');window.__f2sCurrentPage='study';open()};
+   let stored='',hintIn=false,optimistic=false;
+   try{stored=localStorage.getItem(KEY)||''}catch(e){}
+   try{hintIn=!!JSON.parse(localStorage.getItem('f2s_challenge_demo_v1')||'{}').loggedIn}catch(e){}
+   /* Returning member who already opened today: go straight to Study (avoids a Home flash); verified once auth is known. */
+   if(hintIn&&stored.split('|')[1]===dayKey){optimistic=true;goStudy()}
+   else{history.replaceState({f2sType:'page',f2sPage:'home'},'','#/home');window.__f2sCurrentPage='home';render()}
+   const decide=a=>{
+    const cur=location.hash;
+    if(cur!=='#/home'&&cur!=='#/study')return; /* user already navigated elsewhere */
+    if(!a||!a.loggedIn){if(cur==='#/study')goHome();return}
+    const mine=(a.uid||'')+'|'+dayKey;let first=true;
+    try{first=localStorage.getItem(KEY)!==mine}catch(e){}
+    if(first){try{localStorage.setItem(KEY,mine)}catch(e){}if(cur==='#/study')goHome()}
+    else if(cur==='#/home')goStudy();
+   };
+   if(window.__f2sAuth&&window.__f2sAuth.ready)decide(window.__f2sAuth);
+   else window.addEventListener('f2s:auth-ready',e=>decide(e.detail),{once:true});
  }else{render()}
 })();
 </script>
@@ -32419,6 +32487,11 @@ body:has(#f2sProfileSheet.open) #f2sHomeEdgeHandle,body:has(#f2sProfileSheet.ope
 @media(max-width:420px){#f2ssTaskDialog .f2ss-time-options{width:82px !important;min-width:82px;max-height:28vh !important;}}
 </style>
 
+
+<style id="f2s-fast-nav-v1">
+/* Instant-feeling bottom navigation */
+#f2sGlobalNav button,#f2sGlobalNav button.active,#f2sGlobalNav button:hover{transition:background-color .05s linear,color .05s linear,transform .05s linear!important;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+</style>
 </html>
 
 <style>
