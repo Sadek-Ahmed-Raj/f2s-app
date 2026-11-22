@@ -16613,7 +16613,7 @@ May Allah make this journey beneficial for both of us. Please remember me in you
     statusEl.append(strong, small);
   };
   const CLOUD_KEYS = /^f2s_/i;
-  const NEVER_SYNC = /(?:public_views|analytics|visitor|session|apk_download|spa_history|authoritative|visit_started)/i;
+  const NEVER_SYNC = /(?:public_views|analytics|visitor|session|apk_download|spa_history|authoritative|visit_started|pwa_install|nav_install|install_device)/i;
   let client = null, userId = null, syncing = false, restoring = false, timer = null, ready = false;
   const dirty = new Set();
   function isCloudKey(key){ return typeof key === 'string' && CLOUD_KEYS.test(key) && !NEVER_SYNC.test(key); }
@@ -16664,11 +16664,29 @@ May Allah make this journey beneficial for both of us. Please remember me in you
       const q=await client.from('f2s_user_state').select('state_key,state_value').eq('user_id',userId);
       if(q.error) throw q.error;
       restoring=true;
+      const dirtyAfterMerge=[];
       const cloudKeys=new Set();
       (q.data||[]).forEach(row=>{
         if(!isCloudKey(row.state_key)) return;
         cloudKeys.add(row.state_key);
-        try{ localStorage.setItem(row.state_key,JSON.stringify(row.state_value)); }catch(e){}
+        try{
+          let val=row.state_value;
+          if(row.state_key==='f2s_study_system_v1'){
+            const loc=JSON.parse(localStorage.getItem(row.state_key)||'null');
+            if(loc&&typeof loc==='object'&&val&&typeof val==='object'){
+              const kf=x=>(x&&x.at)?'at:'+x.at:JSON.stringify(x);
+              const un=(a,b)=>{const m=new Map();[...(Array.isArray(a)?a:[]),...(Array.isArray(b)?b:[])].forEach(x=>{const k=kf(x);if(!m.has(k))m.set(k,x)});return [...m.values()]};
+              const tk=t=>[t&&t.text,t&&t.date,t&&t.repeatGroup||''].join('|');
+              const dT=new Set([...(val.deletedTasks||[]),...(loc.deletedTasks||[])]);
+              const tm=new Map();[...(Array.isArray(val.tasks)?val.tasks:[]),...(Array.isArray(loc.tasks)?loc.tasks:[])].forEach(t=>{const k=tk(t);if(!tm.has(k))tm.set(k,t)});
+              const dead=[...new Set([...(val.deletedSessions||[]),...(loc.deletedSessions||[])])];
+              const ds=new Set(dead.map(String));
+              val={...val,...loc,sessions:un(val.sessions,loc.sessions).filter(x=>!(x&&x.at&&ds.has(String(x.at)))),breaks:un(val.breaks,loc.breaks),tasks:[...tm.values()].filter(t=>!dT.has(tk(t))),deletedSessions:dead,deletedTasks:[...dT]};
+              dirtyAfterMerge.push(row.state_key);
+            }
+          }
+          localStorage.setItem(row.state_key,JSON.stringify(val));
+        }catch(e){}
       });
       restoring=false;
       // Preserve local-only work: upload a local key only when the cloud has no row for it.
@@ -16678,6 +16696,7 @@ May Allah make this journey beneficial for both of us. Please remember me in you
         if(isCloudKey(key) && !cloudKeys.has(key)) localKeys.push(key);
       }
       localKeys.forEach(k=>dirty.add(k));
+      dirtyAfterMerge.forEach(k=>dirty.add(k));
       ready=true;
       if(dirty.size) await flush();
       else say('ok','F2S Cloud · Connected','Your Supabase data is loaded.');
@@ -20686,7 +20705,7 @@ body.f2s-feed-exclusive #f2sMoreMenu{z-index:2147482000!important}
       <div class="f2s-install-card">
         <div class="f2s-install-glow"></div>
         <button type="button" class="f2s-install-close" aria-label="Close">×</button>
-        <div class="f2s-install-brand"><img class="f2s-install-logo-img" src="${IMG_F2S_LOGO}" alt="F2S Logo"></div>
+        <div class="f2s-install-brand"><img class="f2s-install-logo-img" src="${typeof IMG_F2S_LOGO!=='undefined'?IMG_F2S_LOGO:'./icons/icon-192.png'}" alt="F2S Logo"></div>
         <div class="f2s-install-kicker">A better way to stay consistent</div>
         <h2 class="f2s-install-title" id="f2sInstallNudgeTitle">Take F2S With You</h2>
         <p class="f2s-install-copy">Install the F2S app for a smoother, focused experience. Keep your daily journey just one tap away.</p>
@@ -20725,7 +20744,7 @@ body.f2s-feed-exclusive #f2sMoreMenu{z-index:2147482000!important}
     return overlay;
   }
   function showPopup(force){
-    if(isInstalled())return false;
+    if(force?!!(window.f2sIsAppInstalled&&window.f2sIsAppInstalled()):isInstalled())return false;
     if(!force&&!PREVIEW_MODE&&wasShownThisWeek())return false;
     if(teliPopupOpen()){
       scheduleAuto(30000);
@@ -20748,7 +20767,7 @@ body.f2s-feed-exclusive #f2sMoreMenu{z-index:2147482000!important}
   }
   // Manual More-menu action remains available, but never overlaps the Teli Task popup.
   window.f2sShowInstallPopup=function(){
-    if(isInstalled())return false;
+    if(window.f2sIsAppInstalled&&window.f2sIsAppInstalled())return false;
     return showPopup(true);
   };
   window.f2sMaybeShowInstallPopup=function(){
@@ -29178,6 +29197,7 @@ body.f2s-study-system-open #f2sStudySystemPage{display:block}
       <div class="f2ss-report-donut-card"><div class="f2ss-report-donut-title">Daily goal progress</div><div class="f2ss-donut-layout"><div class="f2ss-donut f2ss-goal-donut" id="f2ssGoalDonut"><div><strong id="f2ssGoalCenter">0%</strong><small>GOAL</small></div></div><div class="f2ss-donut-legend" id="f2ssGoalLegend"></div></div></div>
      </div>
     </div>
+    <div class="f2ss-backup-row" style="display:flex;gap:8px;margin:0 0 12px"><button type="button" class="f2ss-btn" id="f2ssBackupExport" style="flex:1;height:44px">⬇ Backup data</button><button type="button" class="f2ss-btn" id="f2ssBackupImport" style="flex:1;height:44px">⬆ Restore data</button><input type="file" id="f2ssBackupFile" accept="application/json,.json" hidden></div>
     <div class="f2ss-focus-map-card" id="f2ssFocusMapCard">
      <div class="f2ss-focus-map-visual">
       <svg viewBox="0 0 180 190" role="img" aria-label="Focused study illustration">
@@ -29343,7 +29363,15 @@ body.f2s-study-system-open #f2sStudySystemPage{display:block}
  let pomoSettings={focus:3000,break:600}; try{const savedPomo=JSON.parse(localStorage.getItem('f2s_study_pomodoro_settings')||'{}');pomoSettings={focus:Number(savedPomo.focusSeconds??(Number(savedPomo.focus||50)*60)),break:Number(savedPomo.breakSeconds??(Number(savedPomo.break||10)*60))}}catch(e){}
  const updatePomoLabel=()=>{const b=$('f2ssPomodoro');b.setAttribute('aria-pressed',String(pomodoro));};
  try{data={...data,...JSON.parse(localStorage.getItem(KEY)||'{}')};if(!Array.isArray(data.plans))data.plans=[];if(!Array.isArray(data.tasks))data.tasks=[];if(!Array.isArray(data.sessions))data.sessions=[];if(!Array.isArray(data.breaks))data.breaks=[];/* Migrate older Planner entries into the shared task list so they appear in To-Do and Timer too. */data.plans.forEach(p=>{if(p.date&&p.text&&!data.tasks.some(t=>t.date===p.date&&t.text===p.text&&t.source==='planner'))data.tasks.push({text:p.text,done:false,subTasks:[],date:p.date,source:'planner'})});data.plans=[];}catch(e){}
- const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(data))}catch(e){}};
+ const tkey=t=>[t&&t.text,t&&t.date,t&&t.repeatGroup||''].join('|');
+ let _prevTK=new Set((data.tasks||[]).map(tkey));
+ const save=()=>{try{
+  const cur=new Set((data.tasks||[]).map(tkey));
+  const dt=new Set(Array.isArray(data.deletedTasks)?data.deletedTasks:[]);
+  _prevTK.forEach(k=>{if(!cur.has(k))dt.add(k)});
+  cur.forEach(k=>dt.delete(k));
+  data.deletedTasks=[...dt].slice(-500);_prevTK=cur;
+  localStorage.setItem(KEY,JSON.stringify(data))}catch(e){}};
 
  /* Cloud restore writes the saved state into localStorage, but this engine keeps its own in-memory copy.
     Without merging, the next save() would overwrite the cloud copy with a partial/empty local one.
@@ -29357,7 +29385,7 @@ body.f2s-study-system-open #f2sStudySystemPage{display:block}
    const dead=new Set(data.deletedSessions.map(String));
    data.sessions=mergeLog(data.sessions,s.sessions).filter(x=>!(x&&x.at&&dead.has(String(x.at))));
    data.breaks=mergeLog(data.breaks,s.breaks);
-   if(!data.tasks.length&&Array.isArray(s.tasks))data.tasks=s.tasks;
+   {const dT=new Set([...(data.deletedTasks||[]),...(Array.isArray(s.deletedTasks)?s.deletedTasks:[])]);data.deletedTasks=[...dT];const have=new Set(data.tasks.map(tkey));(Array.isArray(s.tasks)?s.tasks:[]).forEach(t=>{if(t&&!have.has(tkey(t))&&!dT.has(tkey(t))){data.tasks.push(t);have.add(tkey(t))}});data.tasks=data.tasks.filter(t=>!dT.has(tkey(t)));_prevTK=new Set(data.tasks.map(tkey))}
   }
   try{const c=JSON.parse(localStorage.getItem('f2s_personal_daily_checkins_v1')||'null');if(c&&typeof c==='object'&&typeof checkinStore==='object'){Object.keys(c).forEach(d=>{checkinStore[d]={...(c[d]||{}),...(checkinStore[d]||{})}});saveCheckin()}}catch(e){}
   save();
@@ -29365,6 +29393,24 @@ body.f2s-study-system-open #f2sStudySystemPage{display:block}
  }catch(e){console.warn('[F2S] cloud merge failed',e)}};
  window.addEventListener('f2s:cloud-ready',()=>setTimeout(mergeCloudState,0));
  if(window.__f2sCloudReadyFired)setTimeout(mergeCloudState,0);
+ /* Manual backup / restore: moves study data between different origins (file:// vs github.io vs PWA). Restore MERGES, never wipes. */
+ (function(){
+  const ex=$('f2ssBackupExport'),im=$('f2ssBackupImport'),fi=$('f2ssBackupFile');if(!ex||!im||!fi)return;
+  const J=k=>{try{return JSON.parse(localStorage.getItem(k)||'null')}catch(e){return null}};
+  ex.addEventListener('click',()=>{save();const out={f2sBackup:1,at:new Date().toISOString(),study:data,checkins:J(CHECKIN_KEY),goals:J(GOAL_KEY),pomodoro:J('f2s_study_pomodoro_settings')};
+   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(out)],{type:'application/json'}));a.download='f2s-study-backup-'+today()+'.json';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500)});
+  im.addEventListener('click',()=>fi.click());
+  fi.addEventListener('change',async()=>{const f=fi.files&&fi.files[0];fi.value='';if(!f)return;
+   try{const b=JSON.parse(await f.text());const s=b.study||b;if(!s||typeof s!=='object'||!Array.isArray(s.sessions||s.tasks||[]))throw 0;
+    const kf=x=>(x&&x.at)?'at:'+x.at:JSON.stringify(x);const dead=new Set([...(data.deletedSessions||[]),...(s.deletedSessions||[])].map(String));
+    const un=(a,c)=>{const m=new Map();[...(a||[]),...(c||[])].forEach(x=>{const k=kf(x);if(!m.has(k))m.set(k,x)});return [...m.values()]};
+    data.deletedSessions=[...dead];data.sessions=un(data.sessions,s.sessions).filter(x=>!(x&&x.at&&dead.has(String(x.at))));data.breaks=un(data.breaks,s.breaks);
+    const dT=new Set([...(data.deletedTasks||[]),...(s.deletedTasks||[])]);const have=new Set(data.tasks.map(tkey));
+    (s.tasks||[]).forEach(t=>{if(t&&!have.has(tkey(t))&&!dT.has(tkey(t))){data.tasks.push(t);have.add(tkey(t))}});data.tasks=data.tasks.filter(t=>!dT.has(tkey(t)));data.deletedTasks=[...dT];
+    if(b.checkins&&typeof b.checkins==='object'){Object.keys(b.checkins).forEach(d=>{checkinStore[d]={...(b.checkins[d]||{}),...(checkinStore[d]||{})}});saveCheckin()}
+    save();try{render()}catch(e){}alert('Restore complete ✓')}catch(e){alert('Invalid backup file')}});
+ })();
+
 
  const CHECKIN_KEY='f2s_personal_daily_checkins_v1';let checkinStore={};try{checkinStore=JSON.parse(localStorage.getItem(CHECKIN_KEY)||'{}')||{}}catch(e){}
  const GOAL_KEY='f2s_study_daily_goals_v1';let goalSettings={normal:18000,qaza:28800};try{goalSettings={...goalSettings,...JSON.parse(localStorage.getItem(GOAL_KEY)||'{}')}}catch(e){}const goalForCheckin=c=>c?.fajrQaza?28800:18000;const personalGoal=()=>Math.max(900,Number(goalSettings.normal)||18000);const goalLabel=secs=>{const h=secs/3600;return Number.isInteger(h)?String(h).padStart(2,'0')+':00':String(Math.floor(h)).padStart(2,'0')+':'+String(Math.round((h%1)*60)).padStart(2,'0')}
